@@ -123,6 +123,7 @@ pix3lcode --resume
 | `/tokens` | Show token usage for the current session |
 | `/sessions` | List saved sessions and switch to one (d\<n\> to delete) |
 | `/undo` | Remove the last user+assistant exchange from history |
+| `/cd <path>` | Change working directory (affects file and shell tools) |
 | `/compact` | Summarize the conversation to free up context |
 | `/init` | Analyze the project and generate `CONTEXT.md` |
 | `/clear` | Clear history and start a new session |

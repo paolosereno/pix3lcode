@@ -144,7 +144,7 @@ def main():
             + (f"  profile: [magenta]{ctx.profile}[/magenta]" if ctx.profile else "")
             + (f"  [dim]session: {session_id}[/dim]" if resumed else "")
             + (f"\n[dim]Project context: CONTEXT.md loaded[/dim]" if load_project_context() else "") + "\n"
-            "[dim]/help  |  /undo  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
+            "[dim]/help  |  /undo  |  /cd  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
             border_style="cyan",
         )
     )
@@ -201,6 +201,7 @@ def main():
                 "[bold]/tokens[/bold]    show token usage for the current session\n"
                 "[bold]/sessions[/bold]  list saved sessions (number=resume, d<n>=delete)\n"
                 "[bold]/undo[/bold]      remove the last user+assistant exchange from history\n"
+                "[bold]/cd <path>[/bold] change working directory (affects file and shell tools)\n"
                 "[bold]/clear[/bold]     clear history and start a new session\n"
                 "[bold]/compact[/bold]   summarize the conversation to free up context\n"
                 "[bold]/init[/bold]      analyze the project and generate CONTEXT.md\n"
@@ -223,6 +224,19 @@ def main():
                 title="[bold]Available commands[/bold]",
                 border_style="cyan",
             ))
+            continue
+
+        if user_input.lower().startswith("/cd"):
+            parts = user_input.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                ctx.console.print(f"[dim]Current directory: {os.getcwd()}[/dim]")
+            else:
+                target = os.path.expanduser(parts[1].strip())
+                try:
+                    os.chdir(target)
+                    ctx.console.print(f"[dim]Working directory: {os.getcwd()}[/dim]")
+                except Exception as e:
+                    ctx.console.print(f"[red]Cannot change directory: {e}[/red]")
             continue
 
         if user_input.lower() == "/undo":

@@ -31,7 +31,7 @@
 - [ ] **`/export`** — export the current session to a readable markdown file.
 - [ ] **`/rename`** — rename the current session with a meaningful name instead of a timestamp.
 - [ ] **`--no-tools` flag** — start without tools (pure chat, saves tokens in system prompt).
-- [ ] **`/cd <path>`** — change working directory during the session without exiting.
+- [x] **`/cd <path>`** — change working directory during the session without exiting.
 - [x] **`/compact`** — summarize the conversation to free up context
 - [x] **`/clear`** — clear history and start a new session
 - [x] **`/help`** — show all available commands and tools
