@@ -10,7 +10,7 @@ try:
     from rich.panel import Panel
     from prompt_toolkit import prompt as pt_prompt
 except ImportError:
-    print("Errore: dipendenze mancanti. Esegui: .venv/bin/pip install -r requirements.txt")
+    print("Error: missing dependencies. Run: .venv/bin/pip install -r requirements.txt")
     sys.exit(1)
 
 console = Console()
@@ -27,10 +27,11 @@ DEFAULTS = {
     "api_retries": 3,
     "context_limit": 80000,
     "context_warn_threshold": 0.70,
+    "max_tool_iterations": 20,
     "system_prompt": (
-        "Sei un assistente AI esperto in programmazione e sistemi Linux. "
-        "Hai accesso a strumenti per leggere/scrivere file, eseguire comandi shell e cercare nel codice. "
-        "Usa questi strumenti quando necessario. Prima di eseguire comandi distruttivi, avvisa l'utente."
+        "You are an AI assistant expert in programming and Linux systems. "
+        "You have access to tools to read/write files, execute shell commands, and search code. "
+        "Use these tools when needed. Before executing destructive commands, warn the user."
     ),
 }
 
@@ -41,7 +42,7 @@ def ask(label: str, default: str | int | float) -> str:
     try:
         val = pt_prompt(f"  {label}{suffix}: ").strip()
     except (KeyboardInterrupt, EOFError):
-        console.print("\n[dim]Setup annullato.[/dim]")
+        console.print("\n[dim]Setup cancelled.[/dim]")
         sys.exit(0)
     return val if val else str(default)
 
@@ -54,7 +55,7 @@ def fetch_models(base_url: str) -> list[str]:
         data = r.json()
         return [m["id"] for m in data.get("data", [])]
     except Exception as e:
-        console.print(f"  [yellow]Impossibile recuperare i modelli: {e}[/yellow]")
+        console.print(f"  [yellow]Cannot fetch models: {e}[/yellow]")
         return []
 
 
@@ -64,22 +65,22 @@ def pick_model(models: list[str]) -> str:
 
     table = Table(border_style="cyan", show_header=False)
     table.add_column("#", style="dim", width=3)
-    table.add_column("Modello", style="green")
+    table.add_column("Model", style="green")
     for i, m in enumerate(models, 1):
         table.add_row(str(i), m)
     console.print(table)
 
     try:
-        choice = pt_prompt("  Scegli modello (numero o nome): ").strip()
+        choice = pt_prompt("  Choose model (number or name): ").strip()
     except (KeyboardInterrupt, EOFError):
-        console.print("\n[dim]Setup annullato.[/dim]")
+        console.print("\n[dim]Setup cancelled.[/dim]")
         sys.exit(0)
 
     if choice.isdigit():
         idx = int(choice) - 1
         if 0 <= idx < len(models):
             return models[idx]
-        console.print("[red]Numero non valido, inserisci il nome manualmente.[/red]")
+        console.print("[red]Invalid number, enter the name manually.[/red]")
         return ""
     return choice
 
@@ -97,63 +98,64 @@ def load_existing(path: str) -> dict:
 def main():
     console.print(Panel.fit(
         "[bold cyan]Pix3lCode — Setup[/bold cyan]\n"
-        "[dim]Configura il tool in base al modello e al contesto di LM Studio[/dim]",
+        "[dim]Configure the tool based on your LM Studio model and context[/dim]",
         border_style="cyan",
     ))
 
-    # destinazione
-    console.print("\n[bold]Dove salvare la configurazione?[/bold]")
-    console.print(f"  1  Progetto corrente  [dim]{CONFIG_PATH_LOCAL}[/dim]")
-    console.print(f"  2  Home (globale)     [dim]{CONFIG_PATH_HOME}[/dim]")
-    dest_choice = ask("Scelta", "1")
+    # destination
+    console.print("\n[bold]Where to save the configuration?[/bold]")
+    console.print(f"  1  Current project  [dim]{CONFIG_PATH_LOCAL}[/dim]")
+    console.print(f"  2  Home (global)    [dim]{CONFIG_PATH_HOME}[/dim]")
+    dest_choice = ask("Choice", "1")
     config_path = CONFIG_PATH_LOCAL if dest_choice != "2" else CONFIG_PATH_HOME
 
     existing = load_existing(config_path)
     cfg = {**DEFAULTS, **existing}
 
-    # URL LM Studio
+    # LM Studio URL
     console.print("\n[bold]LM Studio[/bold]")
-    cfg["base_url"] = ask("Indirizzo API", cfg["base_url"])
+    cfg["base_url"] = ask("API URL", cfg["base_url"])
 
-    # recupera modelli
-    console.print(f"\n  [dim]Recupero modelli da {cfg['base_url']}…[/dim]")
+    # fetch models
+    console.print(f"\n  [dim]Fetching models from {cfg['base_url']}…[/dim]")
     models = fetch_models(cfg["base_url"])
 
-    console.print("\n[bold]Modello[/bold]")
+    console.print("\n[bold]Model[/bold]")
     if models:
-        console.print(f"  Trovati [green]{len(models)}[/green] modelli caricati in LM Studio:\n")
+        console.print(f"  Found [green]{len(models)}[/green] models loaded in LM Studio:\n")
         selected = pick_model(models)
         if selected:
             cfg["model"] = selected
         else:
-            cfg["model"] = ask("Nome modello", cfg["model"])
+            cfg["model"] = ask("Model name", cfg["model"])
     else:
-        cfg["model"] = ask("Nome modello", cfg["model"])
+        cfg["model"] = ask("Model name", cfg["model"])
 
-    # contesto
-    console.print("\n[bold]Contesto[/bold]")
-    console.print("  [dim]Inserisci il numero di token massimo che riesci a caricare in LM Studio per questo modello.[/dim]")
-    cfg["context_limit"] = int(ask("Token di contesto", cfg["context_limit"]))
+    # context
+    console.print("\n[bold]Context[/bold]")
+    console.print("  [dim]Enter the maximum token count you can load in LM Studio for this model.[/dim]")
+    cfg["context_limit"] = int(ask("Context tokens", cfg["context_limit"]))
 
-    raw_threshold = ask("Soglia avviso contesto (es. 70 per 70%)", int(float(cfg["context_warn_threshold"]) * 100))
+    raw_threshold = ask("Context warning threshold (e.g. 70 for 70%)", int(float(cfg["context_warn_threshold"]) * 100))
     cfg["context_warn_threshold"] = round(int(raw_threshold) / 100, 2)
 
-    # timeout e retry
-    console.print("\n[bold]Timeout e retry[/bold]")
-    cfg["api_timeout"]  = int(ask("Timeout API in secondi", cfg["api_timeout"]))
-    cfg["shell_timeout"] = int(ask("Timeout comandi shell in secondi", cfg["shell_timeout"]))
-    cfg["api_retries"]  = int(ask("Tentativi retry in caso di errore", cfg["api_retries"]))
+    # timeouts and retry
+    console.print("\n[bold]Timeouts and retry[/bold]")
+    cfg["api_timeout"]        = int(ask("API timeout in seconds", cfg["api_timeout"]))
+    cfg["shell_timeout"]      = int(ask("Shell command timeout in seconds", cfg["shell_timeout"]))
+    cfg["api_retries"]        = int(ask("Retry attempts on API failure", cfg["api_retries"]))
+    cfg["max_tool_iterations"] = int(ask("Max tool calls per response", cfg["max_tool_iterations"]))
 
-    # sessioni
-    console.print("\n[bold]Sessioni[/bold]")
-    cfg["sessions_dir"] = ask("Directory sessioni", cfg["sessions_dir"])
+    # sessions
+    console.print("\n[bold]Sessions[/bold]")
+    cfg["sessions_dir"] = ask("Sessions directory", cfg["sessions_dir"])
 
     # system prompt
     console.print("\n[bold]System prompt[/bold]")
-    console.print(f"  [dim]Attuale: {cfg['system_prompt'][:80]}…[/dim]")
-    change = ask("Modificare il system prompt? (s/N)", "N")
-    if change.lower() in ("s", "si", "sì", "y", "yes"):
-        console.print("  [dim]Inserisci il nuovo system prompt (Invio per terminare):[/dim]")
+    console.print(f"  [dim]Current: {cfg['system_prompt'][:80]}…[/dim]")
+    change = ask("Edit system prompt? (y/N)", "N")
+    if change.lower() in ("y", "yes"):
+        console.print("  [dim]Enter the new system prompt (Enter to confirm):[/dim]")
         try:
             new_prompt = pt_prompt("  > ").strip()
             if new_prompt:
@@ -161,21 +163,22 @@ def main():
         except (KeyboardInterrupt, EOFError):
             pass
 
-    # salva
-    console.print(f"\n[dim]Salvataggio in {config_path}…[/dim]")
+    # save
+    console.print(f"\n[dim]Saving to {config_path}…[/dim]")
     os.makedirs(os.path.dirname(config_path) if os.path.dirname(config_path) else ".", exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
     console.print(Panel(
-        f"[bold green]Configurazione salvata![/bold green]\n\n"
-        f"  Modello:   [green]{cfg['model']}[/green]\n"
-        f"  URL:       [dim]{cfg['base_url']}[/dim]\n"
-        f"  Contesto:  [cyan]{cfg['context_limit']:,}[/cyan] token "
-        f"(avviso al [cyan]{int(cfg['context_warn_threshold']*100)}%[/cyan])\n"
-        f"  API:       timeout {cfg['api_timeout']}s, retry {cfg['api_retries']}x\n"
-        f"  Sessioni:  [dim]{cfg['sessions_dir']}[/dim]\n\n"
-        f"Avvia il tool con: [bold]./pix3lcode.sh[/bold]",
+        f"[bold green]Configuration saved![/bold green]\n\n"
+        f"  Model:      [green]{cfg['model']}[/green]\n"
+        f"  URL:        [dim]{cfg['base_url']}[/dim]\n"
+        f"  Context:    [cyan]{cfg['context_limit']:,}[/cyan] tokens "
+        f"(warn at [cyan]{int(cfg['context_warn_threshold']*100)}%[/cyan])\n"
+        f"  API:        timeout {cfg['api_timeout']}s, retry {cfg['api_retries']}x\n"
+        f"  Max tools:  {cfg['max_tool_iterations']} iterations per response\n"
+        f"  Sessions:   [dim]{cfg['sessions_dir']}[/dim]\n\n"
+        f"Start the tool with: [bold]./pix3lcode.sh[/bold]",
         border_style="green",
     ))
 
