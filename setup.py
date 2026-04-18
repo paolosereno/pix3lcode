@@ -145,6 +145,13 @@ def main():
     cfg["shell_timeout"]      = int(ask("Shell command timeout in seconds", cfg["shell_timeout"]))
     cfg["api_retries"]        = int(ask("Retry attempts on API failure", cfg["api_retries"]))
     cfg["max_tool_iterations"] = int(ask("Max tool calls per response", cfg["max_tool_iterations"]))
+    cfg["read_file_limit"]    = int(ask("Max bytes to read from a file (0 = unlimited)", cfg.get("read_file_limit", 100_000)))
+
+    # confirmations
+    console.print("\n[bold]Confirmations[/bold]")
+    console.print("  [dim]auto_yes skips confirmation for write_file, patch_file and dangerous shell commands.[/dim]")
+    auto_yes_val = ask("Skip all confirmations? (y/N)", "Y" if cfg.get("auto_yes") else "N")
+    cfg["auto_yes"] = auto_yes_val.lower() in ("y", "yes")
 
     # sessions
     console.print("\n[bold]Sessions[/bold]")
@@ -177,6 +184,8 @@ def main():
         f"(warn at [cyan]{int(cfg['context_warn_threshold']*100)}%[/cyan])\n"
         f"  API:        timeout {cfg['api_timeout']}s, retry {cfg['api_retries']}x\n"
         f"  Max tools:  {cfg['max_tool_iterations']} iterations per response\n"
+        f"  Read limit: {cfg['read_file_limit'] // 1024}KB per file\n"
+        f"  Auto-yes:   {'yes (no confirmations)' if cfg.get('auto_yes') else 'no (ask before writing)'}\n"
         f"  Sessions:   [dim]{cfg['sessions_dir']}[/dim]\n\n"
         f"Start the tool with: [bold]./pix3lcode.sh[/bold]",
         border_style="green",
