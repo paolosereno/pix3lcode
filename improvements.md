@@ -1,4 +1,4 @@
-# Miglioramenti LLM CLI
+# Miglioramenti Pix3lCode
 
 ## Alta priorità
 
@@ -9,8 +9,9 @@
 ## Media priorità
 
 - [x] **Tool `search_files`** — cerca testo nei file con regex (come grep), così il modello può esplorare il codice
+- [x] **Git integration** — tool `git_status`, `git_diff`, `git_log`, `git_commit` (con conferma utente)
 - [ ] **Multiline input** — con `Alt+Enter` per inviare blocchi di codice o testi lunghi
-- [x] **Prompt di sistema configurabile** — modificabile tramite `llm_cli_config.json` senza toccare il codice
+- [x] **Prompt di sistema configurabile** — modificabile tramite `pix3lcode_config.json` senza toccare il codice
 
 ## Bassa priorità
 
@@ -21,11 +22,11 @@
 - [x] **Salvataggio sessione** — auto-save dopo ogni scambio, `/sessions` per riprendere, `--resume` da CLI
 - [x] **`/tokens`** — mostra i token usati nella sessione corrente (prompt, completion, totale)
 - [x] **Contatore token** — mostrato automaticamente dopo ogni risposta
-- [x] **Configurazione JSON** — `llm_cli_config.json` per URL, modello, timeout, soglie contesto e prompt
+- [x] **Configurazione JSON** — `pix3lcode_config.json` per URL, modello, timeout, soglie contesto e prompt
 - [x] **Retry automatico** — backoff esponenziale (2s, 4s, 8s…) per N tentativi configurabili
 - [x] **Timeout configurabile** — `api_timeout` e `api_retries` nel file di configurazione
 - [x] **Troncamento intelligente** — avvisa quando il contesto supera la soglia configurata (default 70%)
-- [x] **Profili** — `./llm.sh --profile coding` carica `profiles/coding.json` con modello e prompt dedicati
+- [x] **Profili** — `./pix3lcode.sh --profile coding` carica `profiles/coding.json` con modello e prompt dedicati
 - [x] **Contesto di progetto** — legge `CONTEXT.md` dalla directory corrente e lo aggiunge al system prompt
 - [x] **`/init`** — analizza il progetto e genera `CONTEXT.md` automaticamente
-- [x] **Modalità non interattiva** — `./llm.sh "prompt"` risponde e termina; supporta pipe da stdin
+- [x] **Modalità non interattiva** — `./pix3lcode.sh "prompt"` risponde e termina; supporta pipe da stdin

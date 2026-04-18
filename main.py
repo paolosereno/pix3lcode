@@ -18,11 +18,11 @@ DEFAULTS = {
     "base_url": "http://10.5.0.2:1234/v1",
     "model": "qwen/qwen3-5b",
     "system_prompt": (
-        "Sei un assistente AI esperto in programmazione e sistemi Linux. "
-        "Hai accesso a strumenti per leggere/scrivere file, eseguire comandi shell e cercare nel codice. "
-        "Usa questi strumenti quando necessario. Prima di eseguire comandi distruttivi, avvisa l'utente."
+        "You are an AI assistant expert in programming and Linux systems. "
+        "You have access to tools to read/write files, execute shell commands, and search code. "
+        "Use these tools when needed. Before executing destructive commands, warn the user."
     ),
-    "sessions_dir": "~/.llm_cli_sessions",
+    "sessions_dir": "~/.pix3lcode_sessions",
     "shell_timeout": 60,
     "api_timeout": 120,
     "api_retries": 3,
@@ -31,20 +31,20 @@ DEFAULTS = {
 }
 
 CONFIG_PATHS = [
-    os.path.join(os.getcwd(), "llm_cli_config.json"),
-    os.path.expanduser("~/.llm_cli_config.json"),
+    os.path.join(os.getcwd(), "pix3lcode_config.json"),
+    os.path.expanduser("~/.pix3lcode_config.json"),
 ]
 
 
 def load_config() -> dict:
     cfg = dict(DEFAULTS)
-    for path in reversed(CONFIG_PATHS):  # home prima, poi locale (sovrascrive)
+    for path in reversed(CONFIG_PATHS):  # home first, then local (overrides)
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     cfg.update(json.load(f))
             except Exception as e:
-                print(f"Attenzione: impossibile leggere {path}: {e}")
+                print(f"Warning: cannot read {path}: {e}")
     return cfg
 
 
@@ -54,14 +54,14 @@ SESSIONS_DIR = os.path.expanduser(cfg["sessions_dir"])
 
 PROFILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
 
-parser = argparse.ArgumentParser(description="LLM CLI — LM Studio client")
-parser.add_argument("--model", "-m", default=cfg["model"], help="Nome del modello da usare")
+parser = argparse.ArgumentParser(description="Pix3lCode — LM Studio client")
+parser.add_argument("--model", "-m", default=cfg["model"], help="Model name to use")
 parser.add_argument("--resume", "-r", nargs="?", const="last", metavar="ID",
-                    help="Riprende l'ultima sessione o quella con l'ID specificato")
-parser.add_argument("--config", "-c", metavar="FILE", help="Percorso di un file di configurazione alternativo")
-parser.add_argument("--profile", "-p", metavar="NOME", help="Profilo da usare (file in profiles/<nome>.json)")
-parser.add_argument("--yes", "-y", action="store_true", help="Conferma automaticamente i comandi shell pericolosi")
-parser.add_argument("prompt_text", nargs="?", metavar="PROMPT", help="Modalità non interattiva: esegue il prompt e termina")
+                    help="Resume the last session or the one with the given ID")
+parser.add_argument("--config", "-c", metavar="FILE", help="Path to an alternative config file")
+parser.add_argument("--profile", "-p", metavar="NAME", help="Profile to use (file in profiles/<name>.json)")
+parser.add_argument("--yes", "-y", action="store_true", help="Auto-confirm dangerous shell commands")
+parser.add_argument("prompt_text", nargs="?", metavar="PROMPT", help="Non-interactive mode: run prompt and exit")
 args = parser.parse_args()
 
 if args.config:
@@ -70,9 +70,9 @@ if args.config:
             with open(args.config, "r", encoding="utf-8") as f:
                 cfg.update(json.load(f))
         except Exception as e:
-            print(f"Errore nel file di configurazione: {e}")
+            print(f"Error in config file: {e}")
     else:
-        print(f"File di configurazione non trovato: {args.config}")
+        print(f"Config file not found: {args.config}")
 
 if args.profile:
     profile_path = os.path.join(PROFILES_DIR, f"{args.profile}.json")
@@ -81,12 +81,12 @@ if args.profile:
             with open(profile_path, "r", encoding="utf-8") as f:
                 cfg.update(json.load(f))
         except Exception as e:
-            print(f"Errore nel profilo '{args.profile}': {e}")
+            print(f"Error in profile '{args.profile}': {e}")
     else:
-        print(f"Profilo '{args.profile}' non trovato in {PROFILES_DIR}/")
+        print(f"Profile '{args.profile}' not found in {PROFILES_DIR}/")
         sys.exit(1)
 
-# --model da CLI sovrascrive il profilo solo se esplicitamente passato
+# --model from CLI overrides profile only if explicitly passed
 if args.model != cfg["model"] or not args.profile:
     MODEL = args.model
 else:
@@ -103,11 +103,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Legge il contenuto di un file dal filesystem",
+            "description": "Read the contents of a file from the filesystem",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Percorso del file da leggere"}
+                    "path": {"type": "string", "description": "Path of the file to read"}
                 },
                 "required": ["path"],
             },
@@ -117,12 +117,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Scrive o sovrascrive un file sul filesystem",
+            "description": "Write or overwrite a file on the filesystem",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Percorso del file da scrivere"},
-                    "content": {"type": "string", "description": "Contenuto da scrivere nel file"},
+                    "path": {"type": "string", "description": "Path of the file to write"},
+                    "content": {"type": "string", "description": "Content to write to the file"},
                 },
                 "required": ["path", "content"],
             },
@@ -132,13 +132,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "list_directory",
-            "description": "Elenca i file e le cartelle in una directory",
+            "description": "List files and folders in a directory",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Percorso della directory (default: directory corrente)",
+                        "description": "Directory path (default: current directory)",
                     }
                 },
                 "required": [],
@@ -149,14 +149,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "execute_shell",
-            "description": "Esegue un comando shell Linux e restituisce stdout e stderr",
+            "description": "Execute a Linux shell command and return stdout and stderr",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Comando shell da eseguire"},
+                    "command": {"type": "string", "description": "Shell command to execute"},
                     "workdir": {
                         "type": "string",
-                        "description": "Directory di lavoro (opzionale, default: directory corrente)",
+                        "description": "Working directory (optional, default: current directory)",
                     },
                 },
                 "required": ["command"],
@@ -168,16 +168,16 @@ TOOLS = [
         "function": {
             "name": "patch_file",
             "description": (
-                "Modifica una parte specifica di un file sostituendo un testo esatto con un nuovo testo. "
-                "Preferisci questo tool a write_file quando devi cambiare solo una porzione del file. "
-                "Il testo da sostituire deve essere esatto e univoco nel file."
+                "Modify a specific part of a file by replacing an exact string with new text. "
+                "Prefer this tool over write_file when changing only a portion of a file. "
+                "The text to replace must be exact and unique in the file."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Percorso del file da modificare"},
-                    "old_string": {"type": "string", "description": "Testo esatto da sostituire (deve essere univoco nel file)"},
-                    "new_string": {"type": "string", "description": "Nuovo testo che sostituirà old_string"},
+                    "path": {"type": "string", "description": "Path of the file to modify"},
+                    "old_string": {"type": "string", "description": "Exact text to replace (must be unique in the file)"},
+                    "new_string": {"type": "string", "description": "New text that will replace old_string"},
                 },
                 "required": ["path", "old_string", "new_string"],
             },
@@ -186,34 +186,139 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "git_status",
+            "description": "Show the status of the current git repository (branch, modified, staged, untracked files)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Repository directory (default: current directory)",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_diff",
+            "description": "Show differences in the git repository. Use staged=true to see changes already in staging (git diff --cached).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "staged": {
+                        "type": "boolean",
+                        "description": "If true show staged changes (--cached), otherwise unstaged changes (default: false)",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Specific file or directory (optional)",
+                    },
+                    "workdir": {
+                        "type": "string",
+                        "description": "Repository directory (default: current directory)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_log",
+            "description": "Show the commit history of the git repository",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_count": {
+                        "type": "integer",
+                        "description": "Maximum number of commits to show (default: 10)",
+                    },
+                    "oneline": {
+                        "type": "boolean",
+                        "description": "Show each commit on one line (default: true)",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Filter commits touching this file/directory (optional)",
+                    },
+                    "workdir": {
+                        "type": "string",
+                        "description": "Repository directory (default: current directory)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_commit",
+            "description": (
+                "Run git add and git commit with the given message. "
+                "Always asks the user for confirmation before proceeding. "
+                "Use files to specify which files to add (default: all tracked modified files)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Commit message",
+                    },
+                    "files": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Files to stage (default: git add -u for all tracked files)",
+                    },
+                    "add_all": {
+                        "type": "boolean",
+                        "description": "If true run git add -A (includes new untracked files, default: false)",
+                    },
+                    "workdir": {
+                        "type": "string",
+                        "description": "Repository directory (default: current directory)",
+                    },
+                },
+                "required": ["message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_files",
             "description": (
-                "Cerca un pattern di testo nei file di una directory (come grep). "
-                "Restituisce le righe corrispondenti con il nome del file e il numero di riga. "
-                "Usa questo tool per trovare funzioni, variabili o pattern nel codice senza leggere tutti i file."
+                "Search for a text pattern in files of a directory (like grep). "
+                "Returns matching lines with file name and line number. "
+                "Use this tool to find functions, variables or patterns in code without reading all files."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "pattern": {
                         "type": "string",
-                        "description": "Pattern di ricerca (regex supportata)",
+                        "description": "Search pattern (regex supported)",
                     },
                     "path": {
                         "type": "string",
-                        "description": "Directory o file in cui cercare (default: directory corrente)",
+                        "description": "Directory or file to search in (default: current directory)",
                     },
                     "glob": {
                         "type": "string",
-                        "description": "Filtro sui file, es. '*.py', '*.js' (default: tutti i file)",
+                        "description": "File filter, e.g. '*.py', '*.js' (default: all files)",
                     },
                     "case_sensitive": {
                         "type": "boolean",
-                        "description": "Ricerca case-sensitive (default: false)",
+                        "description": "Case-sensitive search (default: false)",
                     },
                     "context_lines": {
                         "type": "integer",
-                        "description": "Numero di righe di contesto prima e dopo ogni match (default: 0)",
+                        "description": "Number of context lines before and after each match (default: 0)",
                     },
                 },
                 "required": ["pattern"],
@@ -228,7 +333,7 @@ def _read_file(path: str) -> str:
         with open(os.path.expanduser(path), "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
 
 
 def _write_file(path: str, content: str) -> str:
@@ -239,9 +344,9 @@ def _write_file(path: str, content: str) -> str:
             os.makedirs(parent, exist_ok=True)
         with open(expanded, "w", encoding="utf-8") as f:
             f.write(content)
-        return f"File scritto con successo: {path} ({len(content)} caratteri)"
+        return f"File written successfully: {path} ({len(content)} characters)"
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
 
 
 def _list_directory(path: str = ".") -> str:
@@ -253,9 +358,9 @@ def _list_directory(path: str = ".") -> str:
             full = os.path.join(expanded, e)
             tag = "/" if os.path.isdir(full) else ""
             lines.append(f"{e}{tag}")
-        return "\n".join(lines) if lines else "(vuota)"
+        return "\n".join(lines) if lines else "(empty)"
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
 
 
 DANGEROUS_PATTERNS = [
@@ -275,18 +380,18 @@ def _is_dangerous(command: str) -> bool:
 def _execute_shell(command: str, workdir: str | None = None) -> str:
     if _is_dangerous(command):
         if args.yes:
-            console.print(f"\n  [bold yellow]⚠ Comando pericoloso eseguito (--yes):[/bold yellow] [yellow]{command}[/yellow]")
+            console.print(f"\n  [bold yellow]⚠ Dangerous command executed (--yes):[/bold yellow] [yellow]{command}[/yellow]")
         else:
             console.print(
-                f"\n  [bold red]⚠ Comando potenzialmente pericoloso:[/bold red]\n"
+                f"\n  [bold red]⚠ Potentially dangerous command:[/bold red]\n"
                 f"  [yellow]{command}[/yellow]"
             )
             try:
-                answer = prompt("  Eseguire? [s/N]: ").strip().lower()
+                answer = prompt("  Execute? [y/N]: ").strip().lower()
             except (KeyboardInterrupt, EOFError):
                 answer = "n"
-            if answer not in ("s", "si", "sì", "y", "yes"):
-                return "Esecuzione annullata dall'utente."
+            if answer not in ("y", "yes"):
+                return "Execution cancelled by user."
 
     try:
         result = subprocess.run(
@@ -306,11 +411,11 @@ def _execute_shell(command: str, workdir: str | None = None) -> str:
             parts.append(f"[stderr]\n{err}")
         if result.returncode != 0:
             parts.append(f"[exit code: {result.returncode}]")
-        return "\n".join(parts) if parts else "(nessun output)"
+        return "\n".join(parts) if parts else "(no output)"
     except subprocess.TimeoutExpired:
-        return "ERRORE: comando scaduto (timeout 60s)"
+        return f"ERROR: command timed out ({cfg['shell_timeout']}s)"
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
 
 
 def _patch_file(path: str, old_string: str, new_string: str) -> str:
@@ -319,18 +424,18 @@ def _patch_file(path: str, old_string: str, new_string: str) -> str:
         with open(expanded, "r", encoding="utf-8") as f:
             content = f.read()
         if old_string not in content:
-            return f"ERRORE: testo non trovato nel file '{path}'. Verifica che il testo da sostituire sia esatto."
+            return f"ERROR: text not found in '{path}'. Make sure the text to replace is exact."
         count = content.count(old_string)
         if count > 1:
-            return f"ERRORE: il testo da sostituire appare {count} volte nel file. Fornisci più contesto per renderlo univoco."
+            return f"ERROR: text appears {count} times in the file. Provide more context to make it unique."
         new_content = content.replace(old_string, new_string, 1)
         with open(expanded, "w", encoding="utf-8") as f:
             f.write(new_content)
-        return f"File modificato con successo: {path}"
+        return f"File patched successfully: {path}"
     except FileNotFoundError:
-        return f"ERRORE: file non trovato '{path}'"
+        return f"ERROR: file not found '{path}'"
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
 
 
 def _search_files(
@@ -352,15 +457,130 @@ def _search_files(
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         out = result.stdout.rstrip()
         if not out:
-            return "Nessun risultato trovato."
+            return "No results found."
         lines = out.splitlines()
         if len(lines) > 200:
-            return "\n".join(lines[:200]) + f"\n[…{len(lines) - 200} righe troncate]"
+            return "\n".join(lines[:200]) + f"\n[…{len(lines) - 200} lines truncated]"
         return out
     except subprocess.TimeoutExpired:
-        return "ERRORE: ricerca scaduta (timeout 30s)"
+        return "ERROR: search timed out (30s)"
     except Exception as e:
-        return f"ERRORE: {e}"
+        return f"ERROR: {e}"
+
+
+def _git_status(path: str = ".") -> str:
+    try:
+        cwd = os.path.expanduser(path)
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, cwd=cwd
+        ).stdout.strip() or "HEAD detached"
+        status = subprocess.run(
+            ["git", "status", "--short"],
+            capture_output=True, text=True, cwd=cwd
+        )
+        if status.returncode != 0:
+            return f"ERROR: {status.stderr.strip()}"
+        body = status.stdout.strip() or "(no changes)"
+        return f"Branch: {branch}\n\n{body}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _git_diff(staged: bool = False, path: str | None = None, workdir: str = ".") -> str:
+    try:
+        cmd = ["git", "diff"]
+        if staged:
+            cmd.append("--cached")
+        if path:
+            cmd.extend(["--", path])
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=os.path.expanduser(workdir), timeout=30
+        )
+        if result.returncode != 0:
+            return f"ERROR: {result.stderr.strip()}"
+        out = result.stdout.strip()
+        if not out:
+            return "(no diff)"
+        lines = out.splitlines()
+        if len(lines) > 300:
+            return "\n".join(lines[:300]) + f"\n[…{len(lines) - 300} lines truncated]"
+        return out
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _git_log(max_count: int = 10, oneline: bool = True, path: str | None = None, workdir: str = ".") -> str:
+    try:
+        cmd = ["git", "log", f"-{max_count}"]
+        if oneline:
+            cmd.append("--oneline")
+        else:
+            cmd.extend(["--format=%h %an %ad%n%s%n", "--date=short"])
+        if path:
+            cmd.extend(["--", path])
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=os.path.expanduser(workdir), timeout=15
+        )
+        if result.returncode != 0:
+            return f"ERROR: {result.stderr.strip()}"
+        return result.stdout.strip() or "(no commits)"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _git_commit(message: str, files: list | None = None, add_all: bool = False, workdir: str = ".") -> str:
+    cwd = os.path.expanduser(workdir)
+    if files:
+        files_str = " ".join(f'"{f}"' for f in files)
+        preview_add = f"git add {files_str}"
+    elif add_all:
+        preview_add = "git add -A"
+    else:
+        preview_add = "git add -u"
+
+    console.print(
+        f"\n  [bold yellow]⚠ Git commit:[/bold yellow]\n"
+        f"  [dim]{preview_add}[/dim]\n"
+        f"  [dim]git commit -m \"{message}\"[/dim]"
+    )
+    try:
+        answer = prompt("  Proceed? [y/N]: ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        answer = "n"
+    if answer not in ("y", "yes"):
+        return "Commit cancelled by user."
+
+    try:
+        if files:
+            add_result = subprocess.run(
+                ["git", "add", "--"] + files,
+                capture_output=True, text=True, cwd=cwd
+            )
+        elif add_all:
+            add_result = subprocess.run(
+                ["git", "add", "-A"],
+                capture_output=True, text=True, cwd=cwd
+            )
+        else:
+            add_result = subprocess.run(
+                ["git", "add", "-u"],
+                capture_output=True, text=True, cwd=cwd
+            )
+        if add_result.returncode != 0:
+            return f"ERROR (git add): {add_result.stderr.strip()}"
+
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", message],
+            capture_output=True, text=True, cwd=cwd
+        )
+        if commit_result.returncode != 0:
+            return f"ERROR (git commit): {commit_result.stderr.strip()}"
+        return commit_result.stdout.strip()
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 TOOL_DISPATCH = {
@@ -376,18 +596,28 @@ TOOL_DISPATCH = {
         a.get("case_sensitive", False),
         a.get("context_lines", 0),
     ),
+    "git_status": lambda a: _git_status(a.get("path", ".")),
+    "git_diff": lambda a: _git_diff(a.get("staged", False), a.get("path"), a.get("workdir", ".")),
+    "git_log": lambda a: _git_log(a.get("max_count", 10), a.get("oneline", True), a.get("path"), a.get("workdir", ".")),
+    "git_commit": lambda a: _git_commit(a["message"], a.get("files"), a.get("add_all", False), a.get("workdir", ".")),
 }
 
 
 def run_tool(name: str, args: dict) -> str:
     handler = TOOL_DISPATCH.get(name)
     if handler is None:
-        return f"Tool sconosciuto: {name}"
+        return f"Unknown tool: {name}"
     return handler(args)
 
 
+def _has_user_message(messages: list) -> bool:
+    return any(
+        (m["role"] if isinstance(m, dict) else m.role) == "user"
+        for m in messages
+    )
+
+
 def _api_call_with_retry(messages: list) -> object:
-    """Chiama l'API con retry automatico in caso di errore."""
     import time
     retries = int(cfg["api_retries"])
     timeout = int(cfg["api_timeout"])
@@ -402,16 +632,24 @@ def _api_call_with_retry(messages: list) -> object:
                 timeout=timeout,
             )
         except Exception as e:
+            err_str = str(e)
+            # LM Studio: template requires at least one user message
+            if "No user query found" in err_str and not _has_user_message(messages):
+                console.print(
+                    "  [yellow]⚠ Model template requires a user message. "
+                    "Adding one automatically.[/yellow]"
+                )
+                messages.insert(1, {"role": "user", "content": "Continue."})
+                continue
             last_exc = e
             if attempt < retries:
-                wait = 2 ** attempt  # backoff esponenziale: 2s, 4s, 8s…
-                console.print(f"  [yellow]Tentativo {attempt}/{retries} fallito ({e}). Riprovo tra {wait}s…[/yellow]")
+                wait = 2 ** attempt
+                console.print(f"  [yellow]Attempt {attempt}/{retries} failed ({e}). Retrying in {wait}s…[/yellow]")
                 time.sleep(wait)
     raise last_exc
 
 
 def _check_context(total_prompt_tokens: int) -> None:
-    """Avvisa se i token usati superano la soglia configurata."""
     limit = int(cfg["context_limit"])
     threshold = float(cfg["context_warn_threshold"])
     if limit <= 0:
@@ -419,20 +657,20 @@ def _check_context(total_prompt_tokens: int) -> None:
     usage_ratio = total_prompt_tokens / limit
     if usage_ratio >= 1.0:
         console.print(
-            f"  [bold red]⚠ Contesto esaurito![/bold red] "
-            f"[red]{total_prompt_tokens:,} / {limit:,} token. Usa /compact o /clear.[/red]"
+            f"  [bold red]⚠ Context exhausted![/bold red] "
+            f"[red]{total_prompt_tokens:,} / {limit:,} tokens. Use /compact or /clear.[/red]"
         )
     elif usage_ratio >= threshold:
         pct = int(usage_ratio * 100)
         console.print(
-            f"  [bold yellow]⚠ Contesto al {pct}%[/bold yellow] "
-            f"[yellow]({total_prompt_tokens:,} / {limit:,} token). "
-            f"Considera /compact per liberare spazio.[/yellow]"
+            f"  [bold yellow]⚠ Context at {pct}%[/bold yellow] "
+            f"[yellow]({total_prompt_tokens:,} / {limit:,} tokens). "
+            f"Consider /compact to free up space.[/yellow]"
         )
 
 
 def agent_loop(messages: list) -> tuple[str, int, int]:
-    """Ritorna (risposta, prompt_tokens_totali, completion_tokens_totali)."""
+    """Returns (reply, total_prompt_tokens, total_completion_tokens)."""
     total_prompt = 0
     total_completion = 0
 
@@ -463,7 +701,7 @@ def agent_loop(messages: list) -> tuple[str, int, int]:
             console.print(f"\n  [bold yellow]⚙ Tool:[/bold yellow] [cyan]{name}[/cyan]  {args}")
             result = run_tool(name, args)
 
-            preview = result if len(result) <= 300 else result[:300] + "\n[…troncato]"
+            preview = result if len(result) <= 300 else result[:300] + "\n[…truncated]"
             console.print(f"  [dim]{preview}[/dim]")
 
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
@@ -473,7 +711,7 @@ def compact_messages(messages: list) -> list:
     system = messages[0]
     conversation = messages[1:]
     if not conversation:
-        console.print("[dim]Nessuna conversazione da compattare.[/dim]")
+        console.print("[dim]Nothing to compact.[/dim]")
         return messages
 
     history_text = []
@@ -490,31 +728,32 @@ def compact_messages(messages: list) -> list:
         {
             "role": "user",
             "content": (
-                "Riassumi la conversazione seguente in modo conciso, "
-                "mantenendo tutti i dettagli tecnici importanti, "
-                "le decisioni prese, i file modificati e il contesto del progetto. "
-                "Il riassunto sarà usato come punto di partenza per continuare il lavoro.\n\n"
+                "Summarize the following conversation concisely, "
+                "keeping all important technical details, "
+                "decisions made, modified files and project context. "
+                "The summary will be used as a starting point to continue the work.\n\n"
                 + "\n\n".join(history_text)
             ),
         },
     ]
 
-    console.print("[dim]Compattando la conversazione…[/dim]")
+    console.print("[dim]Compacting conversation…[/dim]")
     response = client.chat.completions.create(model=MODEL, messages=summary_prompt)
     summary = response.choices[0].message.content or ""
 
     new_messages = [
         system,
-        {"role": "assistant", "content": f"[Riassunto della conversazione precedente]\n\n{summary}"},
+        {"role": "user", "content": "Continue from the summary of the previous conversation."},
+        {"role": "assistant", "content": f"[Summary of previous conversation]\n\n{summary}"},
     ]
-    console.print(Panel(Markdown(summary), title="[bold]Riassunto[/bold]", border_style="dim"))
+    console.print(Panel(Markdown(summary), title="[bold]Summary[/bold]", border_style="dim"))
     return new_messages
 
 
-# ── Gestione sessioni ─────────────────────────────────────────────────────────
+# ── Session management ────────────────────────────────────────────────────────
 
 def _serialize_messages(messages: list) -> list:
-    """Converte i messaggi in dict semplici (gestisce oggetti pydantic dell'SDK)."""
+    """Convert messages to plain dicts (handles pydantic objects from the SDK)."""
     result = []
     for m in messages:
         if isinstance(m, dict):
@@ -540,7 +779,7 @@ def _first_user_message(messages: list) -> str:
         content = m["content"] if isinstance(m, dict) else (m.content or "")
         if role == "user" and content:
             return content[:60].replace("\n", " ")
-    return "sessione vuota"
+    return "empty session"
 
 
 def save_session(messages: list, session_id: str) -> None:
@@ -583,48 +822,77 @@ def list_sessions(n: int = 10) -> list[dict]:
     return sessions
 
 
-def pick_session() -> list | None:
-    """Mostra le ultime sessioni e chiede all'utente quale riprendere."""
-    sessions = list_sessions()
-    if not sessions:
-        console.print("[dim]Nessuna sessione salvata.[/dim]")
-        return None
+def delete_session(session_id: str) -> bool:
+    path = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    if os.path.exists(path):
+        os.remove(path)
+        return True
+    return False
 
-    table = Table(title="Sessioni recenti", border_style="cyan")
+
+def _print_sessions_table(sessions: list) -> None:
+    table = Table(title="Recent sessions", border_style="cyan")
     table.add_column("#", style="dim", width=3)
     table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Data", style="dim")
-    table.add_column("Modello", style="green")
-    table.add_column("Anteprima")
-
+    table.add_column("Date", style="dim")
+    table.add_column("Model", style="green")
+    table.add_column("Preview")
     for i, s in enumerate(sessions, 1):
         saved_at = s.get("saved_at", "")[:16].replace("T", " ")
         table.add_row(str(i), s["id"], saved_at, s.get("model", "?"), s.get("preview", ""))
-
     console.print(table)
 
-    try:
-        choice = prompt("Scegli sessione (numero o ID, Invio per annullare): ").strip()
-    except (KeyboardInterrupt, EOFError):
+
+def pick_session() -> list | None:
+    """Show recent sessions and ask the user which one to resume or delete."""
+    sessions = list_sessions()
+    if not sessions:
+        console.print("[dim]No saved sessions.[/dim]")
         return None
 
-    if not choice:
-        return None
+    while True:
+        _print_sessions_table(sessions)
+        console.print("[dim]Enter a number to resume, d<n> to delete (e.g. d1), Enter to cancel[/dim]")
 
-    if choice.isdigit():
-        idx = int(choice) - 1
-        if 0 <= idx < len(sessions):
-            return load_session(sessions[idx]["id"])
-        console.print("[red]Numero non valido.[/red]")
-        return None
+        try:
+            choice = prompt("Choice: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
 
-    return load_session(choice)
+        if not choice:
+            return None
+
+        # delete: d1, d 1, D1…
+        if choice.lower().startswith("d"):
+            num_str = choice[1:].strip()
+            if num_str.isdigit():
+                idx = int(num_str) - 1
+                if 0 <= idx < len(sessions):
+                    sid = sessions[idx]["id"]
+                    delete_session(sid)
+                    console.print(f"[dim]Session {sid} deleted.[/dim]")
+                    sessions = list_sessions()
+                    if not sessions:
+                        console.print("[dim]No sessions left.[/dim]")
+                        return None
+                    continue
+            console.print("[red]Invalid number.[/red]")
+            continue
+
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(sessions):
+                return load_session(sessions[idx]["id"])
+            console.print("[red]Invalid number.[/red]")
+            continue
+
+        return load_session(choice)
 
 
-# ── Contesto di progetto ──────────────────────────────────────────────────────
+# ── Project context ───────────────────────────────────────────────────────────
 
 def load_project_context() -> str | None:
-    """Legge CONTEXT.md dalla directory corrente se esiste."""
+    """Read CONTEXT.md from the current directory if it exists."""
     path = os.path.join(os.getcwd(), "CONTEXT.md")
     if os.path.exists(path):
         try:
@@ -641,15 +909,15 @@ def build_system_prompt() -> str:
         return SYSTEM_PROMPT
     return (
         SYSTEM_PROMPT
-        + "\n\n## Contesto del progetto\n\n"
+        + "\n\n## Project context\n\n"
         + context
     )
 
 
-# ── Modalità non interattiva ──────────────────────────────────────────────────
+# ── Non-interactive mode ──────────────────────────────────────────────────────
 
 def run_once(user_input: str) -> None:
-    """Esegue un singolo prompt e stampa la risposta su stdout."""
+    """Run a single prompt and print the response to stdout."""
     system_prompt = build_system_prompt()
     messages = [
         {"role": "system", "content": system_prompt},
@@ -659,7 +927,7 @@ def run_once(user_input: str) -> None:
         reply, _, _ = agent_loop(messages)
         print(reply)
     except Exception as e:
-        print(f"Errore: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -668,12 +936,12 @@ def run_once(user_input: str) -> None:
 def main():
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # modalità non interattiva
+    # non-interactive mode
     if args.prompt_text:
         run_once(args.prompt_text)
         return
 
-    # leggi da stdin se c'è pipe (es. cat file.py | ./llm.sh "spiega questo")
+    # read from stdin if piped (e.g. cat file.py | ./pix3lcode.sh "explain this")
     if not sys.stdin.isatty():
         stdin_content = sys.stdin.read().strip()
         if stdin_content:
@@ -691,11 +959,11 @@ def main():
         else:
             loaded = load_session(args.resume)
             if loaded is None:
-                console.print(f"[red]Sessione '{args.resume}' non trovata.[/red]")
+                console.print(f"[red]Session '{args.resume}' not found.[/red]")
 
         if loaded:
             messages = loaded
-            # riusa l'ID della sessione ripresa per sovrascriverla al salvataggio
+            # reuse the resumed session ID so it gets overwritten on save
             files = sorted(
                 glob_module.glob(os.path.join(SESSIONS_DIR, "*.json")),
                 key=os.path.getmtime,
@@ -706,21 +974,21 @@ def main():
             elif args.resume != "last":
                 session_id = args.resume
             resumed = True
-            console.print(f"[dim]Sessione ripresa: {session_id}[/dim]")
+            console.print(f"[dim]Session resumed: {session_id}[/dim]")
 
     console.print(
         Panel.fit(
-            f"[bold cyan]LLM CLI[/bold cyan] — LM Studio  [dim]{BASE_URL}[/dim]\n"
-            f"Modello: [green]{MODEL}[/green]"
-            + (f"  profilo: [magenta]{args.profile}[/magenta]" if args.profile else "")
-            + (f"  [dim]sessione: {session_id}[/dim]" if resumed else "")
-            + (f"\n[dim]Contesto progetto: CONTEXT.md caricato[/dim]" if load_project_context() else "") + "\n"
+            f"[bold cyan]Pix3lCode[/bold cyan] — LM Studio  [dim]{BASE_URL}[/dim]\n"
+            f"Model: [green]{MODEL}[/green]"
+            + (f"  profile: [magenta]{args.profile}[/magenta]" if args.profile else "")
+            + (f"  [dim]session: {session_id}[/dim]" if resumed else "")
+            + (f"\n[dim]Project context: CONTEXT.md loaded[/dim]" if load_project_context() else "") + "\n"
             "[dim]/help  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
             border_style="cyan",
         )
     )
 
-    history_file = os.path.expanduser("~/.llm_cli_history")
+    history_file = os.path.expanduser("~/.pix3lcode_history")
     total_prompt_tokens = 0
     total_completion_tokens = 0
 
@@ -733,7 +1001,7 @@ def main():
             ).strip()
         except (KeyboardInterrupt, EOFError):
             save_session(messages, session_id)
-            console.print(f"\n[dim]Sessione salvata ({session_id}). Arrivederci![/dim]")
+            console.print(f"\n[dim]Session saved ({session_id}). Goodbye![/dim]")
             break
 
         if not user_input:
@@ -741,20 +1009,20 @@ def main():
 
         if user_input.lower() in ("/exit", "/quit"):
             save_session(messages, session_id)
-            console.print(f"[dim]Sessione salvata ({session_id}). Arrivederci![/dim]")
+            console.print(f"[dim]Session saved ({session_id}). Goodbye![/dim]")
             break
 
         if user_input.lower() == "/model":
-            console.print(f"[bold]Modello:[/bold] [green]{MODEL}[/green]  [dim]{BASE_URL}[/dim]")
+            console.print(f"[bold]Model:[/bold] [green]{MODEL}[/green]  [dim]{BASE_URL}[/dim]")
             continue
 
         if user_input.lower() == "/tokens":
             total = total_prompt_tokens + total_completion_tokens
             console.print(
-                f"[bold]Token sessione:[/bold]  "
+                f"[bold]Session tokens:[/bold]  "
                 f"prompt [cyan]{total_prompt_tokens:,}[/cyan]  "
                 f"completion [cyan]{total_completion_tokens:,}[/cyan]  "
-                f"totale [bold cyan]{total:,}[/bold cyan]"
+                f"total [bold cyan]{total:,}[/bold cyan]"
             )
             continue
 
@@ -762,31 +1030,35 @@ def main():
             loaded = pick_session()
             if loaded:
                 messages = loaded
-                console.print("[dim]Sessione caricata.[/dim]")
+                console.print("[dim]Session loaded.[/dim]")
             continue
 
         if user_input.lower() == "/help":
             console.print(Panel(
-                "[bold]/help[/bold]      mostra questo messaggio\n"
-                "[bold]/model[/bold]     mostra il modello e l'URL in uso\n"
-                "[bold]/tokens[/bold]    mostra i token usati nella sessione corrente\n"
-                "[bold]/sessions[/bold]  mostra le sessioni salvate e permette di riprenderne una\n"
-                "[bold]/clear[/bold]     cancella la cronologia e riparte da zero\n"
-                "[bold]/compact[/bold]   riassume la conversazione per liberare contesto\n"
-                "[bold]/init[/bold]      analizza il progetto e genera CONTEXT.md\n"
-                "[bold]/exit[/bold]      salva ed esce\n\n"
-                "[bold cyan]Tool disponibili per il modello:[/bold cyan]\n"
-                "  [cyan]read_file[/cyan]      legge un file\n"
-                "  [cyan]write_file[/cyan]     scrive o crea un file\n"
-                "  [cyan]patch_file[/cyan]     modifica solo una parte di un file (old→new)\n"
-                "  [cyan]list_directory[/cyan] elenca i file di una directory\n"
-                "  [cyan]execute_shell[/cyan]  esegue un comando shell (chiede conferma se pericoloso)\n"
-                "  [cyan]search_files[/cyan]   cerca testo nei file con regex (come grep)\n\n"
-                "[bold cyan]Resume da riga di comando:[/bold cyan]\n"
-                "  [dim]./llm.sh --resume[/dim]          riprende scegliendo dalla lista\n"
-                "  [dim]./llm.sh --resume 20240418_1230[/dim]  riprende una sessione specifica\n\n"
-                f"[bold]Modello:[/bold] [green]{MODEL}[/green]  [dim]{BASE_URL}[/dim]",
-                title="[bold]Comandi disponibili[/bold]",
+                "[bold]/help[/bold]      show this message\n"
+                "[bold]/model[/bold]     show the active model and URL\n"
+                "[bold]/tokens[/bold]    show token usage for the current session\n"
+                "[bold]/sessions[/bold]  list saved sessions (number=resume, d<n>=delete)\n"
+                "[bold]/clear[/bold]     clear history and start a new session\n"
+                "[bold]/compact[/bold]   summarize the conversation to free up context\n"
+                "[bold]/init[/bold]      analyze the project and generate CONTEXT.md\n"
+                "[bold]/exit[/bold]      save and exit\n\n"
+                "[bold cyan]Available tools for the model:[/bold cyan]\n"
+                "  [cyan]read_file[/cyan]      read a file\n"
+                "  [cyan]write_file[/cyan]     write or create a file\n"
+                "  [cyan]patch_file[/cyan]     modify only a part of a file (old→new)\n"
+                "  [cyan]list_directory[/cyan] list files in a directory\n"
+                "  [cyan]execute_shell[/cyan]  run a shell command (asks confirmation if dangerous)\n"
+                "  [cyan]search_files[/cyan]   search text in files with regex (like grep)\n"
+                "  [cyan]git_status[/cyan]     show git repository status\n"
+                "  [cyan]git_diff[/cyan]       show diff (staged or unstaged)\n"
+                "  [cyan]git_log[/cyan]        show commit history\n"
+                "  [cyan]git_commit[/cyan]     run git add + commit (asks confirmation)\n\n"
+                "[bold cyan]Resume from command line:[/bold cyan]\n"
+                "  [dim]./pix3lcode.sh --resume[/dim]              resume from list\n"
+                "  [dim]./pix3lcode.sh --resume 20240418_1230[/dim]  resume a specific session\n\n"
+                f"[bold]Model:[/bold] [green]{MODEL}[/green]  [dim]{BASE_URL}[/dim]",
+                title="[bold]Available commands[/bold]",
                 border_style="cyan",
             ))
             continue
@@ -794,47 +1066,53 @@ def main():
         if user_input.lower() == "/clear":
             messages = [{"role": "system", "content": build_system_prompt()}]
             session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-            console.print("[dim]Cronologia cancellata. Nuova sessione avviata.[/dim]")
+            console.print("[dim]History cleared. New session started.[/dim]")
             continue
 
         if user_input.lower() == "/compact":
-            with console.status("[bold blue]Compattando…[/bold blue]", spinner="dots"):
+            with console.status("[bold blue]Compacting…[/bold blue]", spinner="dots"):
                 try:
                     messages = compact_messages(messages)
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Cancelled.[/yellow]")
                 except Exception as e:
-                    console.print(f"[red]Errore durante /compact: {e}[/red]")
+                    console.print(f"[red]Error during /compact: {e}[/red]")
             continue
 
         if user_input.lower() == "/init":
             context_path = os.path.join(os.getcwd(), "CONTEXT.md")
             if os.path.exists(context_path):
                 try:
-                    answer = prompt("  CONTEXT.md esiste già. Sovrascrivere? [s/N]: ").strip().lower()
+                    answer = prompt("  CONTEXT.md already exists. Overwrite? [y/N]: ").strip().lower()
                 except (KeyboardInterrupt, EOFError):
                     answer = "n"
-                if answer not in ("s", "si", "sì", "y", "yes"):
-                    console.print("[dim]Operazione annullata.[/dim]")
+                if answer not in ("y", "yes"):
+                    console.print("[dim]Operation cancelled.[/dim]")
                     continue
 
             init_prompt = (
-                f"Analizza il progetto nella directory '{os.getcwd()}'. "
-                "Usa list_directory e read_file per esplorare la struttura, "
-                "leggere i file principali (README, file di configurazione, entry point, ecc.) "
-                "e capire le tecnologie usate, le convenzioni e l'architettura. "
-                "Poi scrivi un file CONTEXT.md conciso (max 300 parole) con queste sezioni:\n"
-                "- Nome e descrizione breve del progetto\n"
-                "- Tecnologie e dipendenze principali\n"
-                "- Struttura delle directory\n"
-                "- Entry point e file principali\n"
-                "- Convenzioni di codice (se rilevabili)\n\n"
-                "Usa write_file per salvare il file CONTEXT.md nella directory corrente."
+                f"Analyze the project in directory '{os.getcwd()}'. "
+                "Use list_directory and read_file to explore the structure, "
+                "read the main files (README, config files, entry points, etc.) "
+                "and understand the technologies, conventions and architecture. "
+                "Then write a concise CONTEXT.md file (max 300 words) with these sections:\n"
+                "- Project name and brief description\n"
+                "- Main technologies and dependencies\n"
+                "- Directory structure\n"
+                "- Entry points and main files\n"
+                "- Code conventions (if detectable)\n\n"
+                "Use write_file to save CONTEXT.md in the current directory."
             )
             messages.append({"role": "user", "content": init_prompt})
-            with console.status("[bold blue]Analisi del progetto in corso…[/bold blue]", spinner="dots"):
+            with console.status("[bold blue]Analyzing project…[/bold blue]", spinner="dots"):
                 try:
                     reply, prompt_tok, completion_tok = agent_loop(messages)
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Cancelled.[/yellow]")
+                    messages.pop()
+                    continue
                 except Exception as e:
-                    console.print(f"[red]Errore durante /init: {e}[/red]")
+                    console.print(f"[red]Error during /init: {e}[/red]")
                     messages.pop()
                     continue
             total_prompt_tokens += prompt_tok
@@ -842,17 +1120,21 @@ def main():
             console.print("\n[bold blue]Assistant:[/bold blue]")
             console.print(Markdown(reply))
             if os.path.exists(context_path):
-                console.print(f"[bold green]CONTEXT.md generato.[/bold green] Verrà caricato automaticamente nelle prossime sessioni.")
+                console.print(f"[bold green]CONTEXT.md generated.[/bold green] It will be loaded automatically in future sessions.")
             save_session(messages, session_id)
             continue
 
         messages.append({"role": "user", "content": user_input})
 
-        with console.status("[bold blue]Sto pensando…[/bold blue]", spinner="dots"):
+        with console.status("[bold blue]Thinking…[/bold blue]", spinner="dots"):
             try:
                 reply, prompt_tok, completion_tok = agent_loop(messages)
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Cancelled.[/yellow]")
+                messages.pop()
+                continue
             except Exception as e:
-                console.print(f"[red]Errore API: {e}[/red]")
+                console.print(f"[red]API error: {e}[/red]")
                 messages.pop()
                 continue
 
@@ -864,11 +1146,11 @@ def main():
         console.print(Markdown(reply))
         _check_context(total_prompt_tokens)
         console.print(
-            f"  [dim]token: prompt {prompt_tok:,} | completion {completion_tok:,} | "
-            f"sessione {total_tok:,}[/dim]"
+            f"  [dim]tokens: prompt {prompt_tok:,} | completion {completion_tok:,} | "
+            f"session {total_tok:,}[/dim]"
         )
 
-        # auto-save dopo ogni scambio
+        # auto-save after each exchange
         save_session(messages, session_id)
 
 

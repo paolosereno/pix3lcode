@@ -1,4 +1,4 @@
-# LLM CLI
+# Pix3lCode
 
 A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with tool calling support for reading/writing files, executing shell commands, and searching code — similar to Claude Code but running entirely on local models.
 
@@ -36,7 +36,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd llm-cli
+cd pix3lcode
 
 # Create virtual environment and install dependencies
 python3 -m venv .venv
@@ -60,52 +60,52 @@ The wizard will ask:
 - Sessions directory
 - System prompt (optional)
 
-Configuration is saved to `llm_cli_config.json` in the current directory (project-specific) or to `~/.llm_cli_config.json` (global). Re-run `./setup.sh` any time you switch models.
+Configuration is saved to `pix3lcode_config.json` in the current directory (project-specific) or to `~/.pix3lcode_config.json` (global). Re-run `./setup.sh` any time you switch models.
 
 ## Usage
 
 ```bash
 # Start a new session
-./llm.sh
+./pix3lcode.sh
 
 # Use a specific model
-./llm.sh --model mistralai/devstral-small-2-2512
-./llm.sh -m qwen/qwen3-5b
+./pix3lcode.sh --model mistralai/devstral-small-2-2512
+./pix3lcode.sh -m qwen/qwen3-5b
 
 # Resume the last session (shows a list to choose from)
-./llm.sh --resume
-./llm.sh -r
+./pix3lcode.sh --resume
+./pix3lcode.sh -r
 
 # Resume a specific session by ID
-./llm.sh --resume 20240418_143022
+./pix3lcode.sh --resume 20240418_143022
 
 # Use an alternative config file
-./llm.sh --config ~/configs/coding.json
+./pix3lcode.sh --config ~/configs/coding.json
 
 # Use a named profile (from profiles/ directory)
-./llm.sh --profile coding
-./llm.sh -p linux
+./pix3lcode.sh --profile coding
+./pix3lcode.sh -p linux
 
 # Non-interactive mode: single prompt, print response and exit
-./llm.sh "scrivi un hello world in rust"
-./llm.sh -p coding "trova bug in questo codice" < main.py
+./pix3lcode.sh "scrivi un hello world in rust"
+./pix3lcode.sh -p coding "trova bug in questo codice" < main.py
 
 # Pipe from stdin
-cat error.log | ./llm.sh "cosa significa questo errore?"
-git diff | ./llm.sh "scrivi un messaggio di commit"
+cat error.log | ./pix3lcode.sh "cosa significa questo errore?"
+git diff | ./pix3lcode.sh "scrivi un messaggio di commit"
 
 # Auto-confirm dangerous shell commands (for use in scripts)
-./llm.sh --yes "pulisci la directory build"
+./pix3lcode.sh --yes "pulisci la directory build"
 ```
 
 ### Optional: global alias
 
 ```bash
-echo "alias llm='/path/to/llm-cli/llm.sh'" >> ~/.bashrc
+echo "alias pix3lcode='/path/to/pix3lcode/pix3lcode.sh'" >> ~/.bashrc
 source ~/.bashrc
 # Then just type:
-llm
-llm --resume
+pix3lcode
+pix3lcode --resume
 ```
 
 ## Commands
@@ -124,7 +124,7 @@ llm --resume
 
 ## Configuration
 
-Copy `llm_cli_config.json` to your project directory or to `~/.llm_cli_config.json` for global settings.
+Copy `pix3lcode_config.json` to your project directory or to `~/.pix3lcode_config.json` for global settings.
 
 **Priority order:** project directory > home directory > built-in defaults
 
@@ -132,7 +132,7 @@ Copy `llm_cli_config.json` to your project directory or to `~/.llm_cli_config.js
 {
   "base_url": "http://10.5.0.2:1234/v1",
   "model": "qwen/qwen3-5b",
-  "sessions_dir": "~/.llm_cli_sessions",
+  "sessions_dir": "~/.pix3lcode_sessions",
   "shell_timeout": 60,
   "api_timeout": 120,
   "api_retries": 3,
@@ -146,7 +146,7 @@ Copy `llm_cli_config.json` to your project directory or to `~/.llm_cli_config.js
 |---|---|---|
 | `base_url` | `http://10.5.0.2:1234/v1` | LM Studio API URL |
 | `model` | `qwen/qwen3-5b` | Default model name |
-| `sessions_dir` | `~/.llm_cli_sessions` | Directory for saved sessions |
+| `sessions_dir` | `~/.pix3lcode_sessions` | Directory for saved sessions |
 | `shell_timeout` | `60` | Shell command timeout (seconds) |
 | `api_timeout` | `120` | API call timeout (seconds) |
 | `api_retries` | `3` | Max retry attempts on API failure |
@@ -161,11 +161,11 @@ If a `CONTEXT.md` file exists in the current directory, it is automatically appe
 Run `/init` to generate it automatically — the model explores the project structure and key files, then writes `CONTEXT.md` for you. Best used with a large-context model (9B, 80k tokens):
 
 ```bash
-./llm.sh          # start with large-context model
+./pix3lcode.sh          # start with large-context model
 /init             # generates CONTEXT.md by reading the project
 /exit             # save and exit
 
-./llm.sh -p coding  # next sessions start with CONTEXT.md already loaded
+./pix3lcode.sh -p coding  # next sessions start with CONTEXT.md already loaded
 ```
 
 If `CONTEXT.md` already exists, `/init` asks before overwriting.
@@ -188,28 +188,28 @@ Pass a prompt directly as argument — the tool responds once and exits. Useful 
 
 ```bash
 # Single prompt
-./llm.sh "scrivi un hello world in rust"
+./pix3lcode.sh "scrivi un hello world in rust"
 
 # Pipe file content
-cat src/main.py | ./llm.sh "trova potenziali bug"
+cat src/main.py | ./pix3lcode.sh "trova potenziali bug"
 
 # Git integration
-git diff | ./llm.sh "scrivi un messaggio di commit"
+git diff | ./pix3lcode.sh "scrivi un messaggio di commit"
 
 # With profile
-./llm.sh -p coding "refactora questa funzione" < utils.py
+./pix3lcode.sh -p coding "refactora questa funzione" < utils.py
 
 # Skip confirmation for dangerous commands (use with care)
-./llm.sh --yes "rimuovi i file temporanei in build/"
+./pix3lcode.sh --yes "rimuovi i file temporanei in build/"
 ```
 
 ## Profiles
 
-Profiles are JSON files stored in the `profiles/` directory. Each profile overrides only the parameters it defines — the rest fall back to `llm_cli_config.json` or built-in defaults.
+Profiles are JSON files stored in the `profiles/` directory. Each profile overrides only the parameters it defines — the rest fall back to `pix3lcode_config.json` or built-in defaults.
 
 ```bash
-./llm.sh --profile coding    # loads profiles/coding.json
-./llm.sh -p linux            # loads profiles/linux.json
+./pix3lcode.sh --profile coding    # loads profiles/coding.json
+./pix3lcode.sh -p linux            # loads profiles/linux.json
 ```
 
 Two example profiles are included:
@@ -243,14 +243,14 @@ The tool tracks token usage and warns you when approaching the context limit:
 
 ## Session management
 
-Sessions are saved automatically to `~/.llm_cli_sessions/` after every exchange and on exit. Each session is a JSON file named by timestamp (e.g. `20240418_143022.json`).
+Sessions are saved automatically to `~/.pix3lcode_sessions/` after every exchange and on exit. Each session is a JSON file named by timestamp (e.g. `20240418_143022.json`).
 
 ```bash
 # Resume interactively
-./llm.sh --resume
+./pix3lcode.sh --resume
 
 # Resume a specific session
-./llm.sh --resume 20240418_143022
+./pix3lcode.sh --resume 20240418_143022
 ```
 
 You can also switch sessions mid-conversation with `/sessions`.

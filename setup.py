@@ -15,13 +15,13 @@ except ImportError:
 
 console = Console()
 
-CONFIG_PATH_LOCAL = os.path.join(os.getcwd(), "llm_cli_config.json")
-CONFIG_PATH_HOME  = os.path.expanduser("~/.llm_cli_config.json")
+CONFIG_PATH_LOCAL = os.path.join(os.getcwd(), "pix3lcode_config.json")
+CONFIG_PATH_HOME  = os.path.expanduser("~/.pix3lcode_config.json")
 
 DEFAULTS = {
     "base_url": "http://10.5.0.2:1234/v1",
     "model": "",
-    "sessions_dir": "~/.llm_cli_sessions",
+    "sessions_dir": "~/.pix3lcode_sessions",
     "shell_timeout": 60,
     "api_timeout": 120,
     "api_retries": 3,
@@ -96,7 +96,7 @@ def load_existing(path: str) -> dict:
 
 def main():
     console.print(Panel.fit(
-        "[bold cyan]LLM CLI — Setup[/bold cyan]\n"
+        "[bold cyan]Pix3lCode — Setup[/bold cyan]\n"
         "[dim]Configura il tool in base al modello e al contesto di LM Studio[/dim]",
         border_style="cyan",
     ))
@@ -175,7 +175,7 @@ def main():
         f"(avviso al [cyan]{int(cfg['context_warn_threshold']*100)}%[/cyan])\n"
         f"  API:       timeout {cfg['api_timeout']}s, retry {cfg['api_retries']}x\n"
         f"  Sessioni:  [dim]{cfg['sessions_dir']}[/dim]\n\n"
-        f"Avvia il tool con: [bold]./llm.sh[/bold]",
+        f"Avvia il tool con: [bold]./pix3lcode.sh[/bold]",
         border_style="green",
     ))
 
