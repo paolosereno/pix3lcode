@@ -88,6 +88,8 @@ def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
     dispatch = _build_dispatch(ctx)
     total_prompt = 0
     total_completion = 0
+    max_iterations = int(ctx.cfg.get("max_tool_iterations", 20))
+    iteration = 0
 
     while True:
         response = _api_call_with_retry(messages, tools_list, ctx)
@@ -101,6 +103,15 @@ def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
 
         if not msg.tool_calls:
             content = msg.content or ""
+            messages.append({"role": "assistant", "content": content})
+            return content, total_prompt, total_completion
+
+        iteration += 1
+        if iteration >= max_iterations:
+            ctx.console.print(
+                f"  [bold red]⚠ Tool iteration limit reached ({max_iterations}). Stopping.[/bold red]"
+            )
+            content = msg.content or f"[Stopped after {max_iterations} tool calls]"
             messages.append({"role": "assistant", "content": content})
             return content, total_prompt, total_completion
 

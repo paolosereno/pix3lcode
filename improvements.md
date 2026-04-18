@@ -2,10 +2,11 @@
 
 ## Bug / robustness
 
-- [ ] **`agent_loop` max iterations** — no iteration limit: if the model keeps calling tools in a loop it never stops. Add configurable `max_tool_iterations` (e.g. 20).
+- [x] **`agent_loop` max iterations** — added `max_tool_iterations` (default 20) in config; loop stops with a warning if limit is reached.
 - [ ] **`read_file` size limit** — reading a large file dumps everything into context. Add a configurable limit (e.g. 100KB) with truncation and warning.
-- [ ] **`import re` inside `_is_dangerous`** — re-imported on every shell call. Move to top of file.
-- [ ] **`loaded` possibly undefined** — in the resume section, if `load_session` is not called (branch `args.resume != "last"` with session not found), `if loaded:` would raise `NameError`.
+- [x] **`import re` inside `_is_dangerous`** — moved to top of `tools.py`.
+- [x] **`loaded` possibly undefined** — fixed in refactored `main.py`: `loaded` is always initialized to `None` before the resume branch.
+- [x] **Spinner blocks confirmation prompt** — `ctx.confirm()` stops the Rich spinner before asking, restarts it after; fixes `execute_shell` and `git_commit` hanging silently.
 
 ## High priority
 
@@ -20,7 +21,7 @@
 - [ ] **`/undo`** — removes the last exchange (user + assistant) from history, useful when the response is wrong.
 - [ ] **Confirmation for `write_file` and `patch_file`** — currently only `execute_shell` asks confirmation, but writing/patching files is equally invasive.
 - [ ] **Multiline input** — `Alt+Enter` to send multi-line blocks (e.g. code snippets).
-- [ ] **`max_tool_iterations` in config** — expose the agent loop iteration limit as a config key.
+- [x] **`max_tool_iterations` in config** — exposed as config key, default 20.
 - [x] **`search_files` tool** — search text in files with regex (like grep)
 - [x] **Configurable system prompt** — editable via `pix3lcode_config.json` without touching the code
 - [x] **Session delete in `/sessions`** — type `d<n>` to delete a session from the list

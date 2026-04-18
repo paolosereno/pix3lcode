@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass, field
 from openai import OpenAI
 from rich.console import Console
+from prompt_toolkit import prompt as pt_prompt
 
 DEFAULTS: dict = {
     "base_url": "http://10.5.0.2:1234/v1",
@@ -19,6 +20,7 @@ DEFAULTS: dict = {
     "api_retries": 3,
     "context_limit": 80000,
     "context_warn_threshold": 0.70,
+    "max_tool_iterations": 20,
 }
 
 CONFIG_PATHS = [
@@ -77,3 +79,17 @@ class AppContext:
     def __post_init__(self):
         self.client = OpenAI(base_url=self.base_url, api_key="lm-studio")
         self.console = Console()
+        self._live_status = None  # set by main loop when spinner is active
+
+    def confirm(self, question: str) -> bool:
+        """Stop the spinner, ask a yes/no question, restart the spinner."""
+        if self._live_status:
+            self._live_status.stop()
+        try:
+            answer = pt_prompt(question).strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            answer = "n"
+        finally:
+            if self._live_status:
+                self._live_status.start()
+        return answer in ("y", "yes")
