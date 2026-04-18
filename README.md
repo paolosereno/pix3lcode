@@ -6,6 +6,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 
 - **Interactive chat** in the terminal with history (arrow keys)
 - **Tool calling** — the model can autonomously use tools to complete tasks
+- **Vision support** — image paths in your message are attached automatically (JPEG, PNG, WebP, …); no special command needed
 - **Session management** — auto-save and resume previous conversations
 - **Token counter** — tracks context usage and warns before the limit is reached
 - **Retry logic** — automatic exponential backoff on API failures
@@ -19,17 +20,22 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 
 | Tool | Description |
 |---|---|
-| `read_file` | Read any file from the filesystem |
-| `write_file` | Write or create a file |
-| `patch_file` | Replace a specific portion of a file (old → new) |
+| `read_file` | Read any file from the filesystem (truncates at configurable limit) |
+| `write_file` | Write or create a file (asks confirmation) |
+| `patch_file` | Replace a specific portion of a file (old → new, asks confirmation) |
 | `list_directory` | List files and folders in a directory |
 | `execute_shell` | Run a Linux shell command (asks confirmation for dangerous ones) |
 | `search_files` | Search text in files with regex, like grep |
+| `git_status` | Show git repository status |
+| `git_diff` | Show diff (staged or unstaged) |
+| `git_log` | Show commit history |
+| `git_commit` | Run git add + commit (asks confirmation) |
 
 ## Requirements
 
 - Python 3.11+
 - [LM Studio](https://lmstudio.ai/) running with a model that supports tool calling (e.g. Qwen3, Devstral)
+- For vision: a multimodal model loaded in LM Studio (e.g. Qwen2-VL, LLaVA)
 
 ## Installation
 
@@ -115,7 +121,8 @@ pix3lcode --resume
 | `/help` | Show all available commands and tools |
 | `/model` | Show the active model and LM Studio URL |
 | `/tokens` | Show token usage for the current session |
-| `/sessions` | List saved sessions and switch to one |
+| `/sessions` | List saved sessions and switch to one (d\<n\> to delete) |
+| `/undo` | Remove the last user+assistant exchange from history |
 | `/compact` | Summarize the conversation to free up context |
 | `/init` | Analyze the project and generate `CONTEXT.md` |
 | `/clear` | Clear history and start a new session |
@@ -152,6 +159,8 @@ Copy `pix3lcode_config.json` to your project directory or to `~/.pix3lcode_confi
 | `api_retries` | `3` | Max retry attempts on API failure |
 | `context_limit` | `80000` | Model context window size (tokens) |
 | `context_warn_threshold` | `0.70` | Warn when context exceeds this fraction |
+| `max_tool_iterations` | `20` | Max tool calls per response before stopping |
+| `read_file_limit` | `100000` | Max bytes read from a file (truncates with warning) |
 | `system_prompt` | *(built-in)* | System prompt for the model |
 
 ## Project context
@@ -180,7 +189,20 @@ Database: PostgreSQL via SQLAlchemy. Tests in `tests/` with pytest.
 Conventions: snake_case, type hints required, no print() in production code.
 ```
 
-The startup panel shows `Contesto progetto: CONTEXT.md caricato` when the file is found.
+The startup panel shows `Project context: CONTEXT.md loaded` when the file is found.
+
+## Vision support
+
+If your model supports images (e.g. Qwen2-VL, LLaVA), just include an image path anywhere in your message — the app attaches it automatically:
+
+```
+You: what's wrong with this UI? /home/paolo/screenshots/error.png
+You: compare these two diagrams ./arch_v1.png ./arch_v2.png
+```
+
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`
+
+The app prints `Image attached: filename.png` as confirmation and encodes the image as a base64 data URL in the API request.
 
 ## Non-interactive mode
 
@@ -257,13 +279,15 @@ You can also switch sessions mid-conversation with `/sessions`.
 
 ## Security
 
-Commands containing potentially dangerous patterns (`rm`, `sudo`, `kill`, `dd`, `chmod`, etc.) require explicit confirmation before execution:
+Commands containing potentially dangerous patterns (`rm`, `sudo`, `kill`, `dd`, `chmod`, `pip install`, `apt`, `curl | bash`, etc.) require explicit confirmation before execution:
 
 ```
-⚠ Comando potenzialmente pericoloso:
+⚠ Potentially dangerous command:
   rm -rf build/
-  Eseguire? [s/N]:
+  Execute? [y/N]:
 ```
+
+`write_file` and `patch_file` also ask for confirmation before modifying files.
 
 ## License
 

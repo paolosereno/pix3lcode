@@ -48,6 +48,10 @@
 - [x] **`/init`** — analyzes the project and generates `CONTEXT.md` automatically
 - [x] **Non-interactive mode** — `./pix3lcode.sh "prompt"` responds and exits; supports stdin pipe
 
+## Vision / multimodal
+
+- [x] **Automatic image attachment** — image paths detected in user messages are base64-encoded and sent as vision content; no special command needed. Supports `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`.
+
 ## Architecture
 
 - [x] **Split into modules** — split into `config.py`, `tools.py`, `git_tools.py`, `session.py`, `context.py`, `agent.py`, `main.py` as entry point.
