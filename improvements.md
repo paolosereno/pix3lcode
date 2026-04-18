@@ -1,32 +1,53 @@
-# Miglioramenti Pix3lCode
+# Pix3lCode — Improvements
 
-## Alta priorità
+## Bug / robustness
 
-- [ ] **Streaming della risposta** — il testo appare parola per parola invece di aspettare tutto insieme
-- [x] **Conferma prima di eseguire shell** — chiede conferma per comandi rischiosi (`rm`, `sudo`, `kill`, ecc.)
-- [x] **Tool `patch_file`** — modifica solo una parte di un file tramite sostituzione old→new univoca
+- [ ] **`agent_loop` max iterations** — no iteration limit: if the model keeps calling tools in a loop it never stops. Add configurable `max_tool_iterations` (e.g. 20).
+- [ ] **`read_file` size limit** — reading a large file dumps everything into context. Add a configurable limit (e.g. 100KB) with truncation and warning.
+- [ ] **`import re` inside `_is_dangerous`** — re-imported on every shell call. Move to top of file.
+- [ ] **`loaded` possibly undefined** — in the resume section, if `load_session` is not called (branch `args.resume != "last"` with session not found), `if loaded:` would raise `NameError`.
 
-## Media priorità
+## High priority
 
-- [x] **Tool `search_files`** — cerca testo nei file con regex (come grep), così il modello può esplorare il codice
-- [x] **Git integration** — tool `git_status`, `git_diff`, `git_log`, `git_commit` (con conferma utente)
-- [ ] **Multiline input** — con `Alt+Enter` per inviare blocchi di codice o testi lunghi
-- [x] **Prompt di sistema configurabile** — modificabile tramite `pix3lcode_config.json` senza toccare il codice
+- [ ] **Response streaming** — text appears word by word instead of waiting for the full response. Most impactful UX improvement.
+- [x] **Shell confirmation** — asks confirmation for dangerous commands (`rm`, `sudo`, `kill`, etc.)
+- [x] **`patch_file` tool** — modifies only a portion of a file via old→new replacement
+- [x] **Git tools** — `git_status`, `git_diff`, `git_log`, `git_commit` (with user confirmation)
+- [x] **Ctrl+C cancels current operation** — instead of crashing the app
 
-## Bassa priorità
+## Medium priority
 
-- [x] **`/compact`** — riassume la conversazione per liberare contesto
-- [x] **`/clear`** — cancella la cronologia e riparte da zero
-- [x] **`/help`** — mostra tutti i comandi e i tool disponibili
-- [x] **`/model`** — mostra il modello attivo e l'URL di LM Studio
-- [x] **Salvataggio sessione** — auto-save dopo ogni scambio, `/sessions` per riprendere, `--resume` da CLI
-- [x] **`/tokens`** — mostra i token usati nella sessione corrente (prompt, completion, totale)
-- [x] **Contatore token** — mostrato automaticamente dopo ogni risposta
-- [x] **Configurazione JSON** — `pix3lcode_config.json` per URL, modello, timeout, soglie contesto e prompt
-- [x] **Retry automatico** — backoff esponenziale (2s, 4s, 8s…) per N tentativi configurabili
-- [x] **Timeout configurabile** — `api_timeout` e `api_retries` nel file di configurazione
-- [x] **Troncamento intelligente** — avvisa quando il contesto supera la soglia configurata (default 70%)
-- [x] **Profili** — `./pix3lcode.sh --profile coding` carica `profiles/coding.json` con modello e prompt dedicati
-- [x] **Contesto di progetto** — legge `CONTEXT.md` dalla directory corrente e lo aggiunge al system prompt
-- [x] **`/init`** — analizza il progetto e genera `CONTEXT.md` automaticamente
-- [x] **Modalità non interattiva** — `./pix3lcode.sh "prompt"` risponde e termina; supporta pipe da stdin
+- [ ] **`/undo`** — removes the last exchange (user + assistant) from history, useful when the response is wrong.
+- [ ] **Confirmation for `write_file` and `patch_file`** — currently only `execute_shell` asks confirmation, but writing/patching files is equally invasive.
+- [ ] **Multiline input** — `Alt+Enter` to send multi-line blocks (e.g. code snippets).
+- [ ] **`max_tool_iterations` in config** — expose the agent loop iteration limit as a config key.
+- [x] **`search_files` tool** — search text in files with regex (like grep)
+- [x] **Configurable system prompt** — editable via `pix3lcode_config.json` without touching the code
+- [x] **Session delete in `/sessions`** — type `d<n>` to delete a session from the list
+
+## Low priority
+
+- [ ] **`/export`** — export the current session to a readable markdown file.
+- [ ] **`/rename`** — rename the current session with a meaningful name instead of a timestamp.
+- [ ] **`--no-tools` flag** — start without tools (pure chat, saves tokens in system prompt).
+- [ ] **`/cd <path>`** — change working directory during the session without exiting.
+- [x] **`/compact`** — summarize the conversation to free up context
+- [x] **`/clear`** — clear history and start a new session
+- [x] **`/help`** — show all available commands and tools
+- [x] **`/model`** — show the active model and LM Studio URL
+- [x] **Session save** — auto-save after each exchange, `/sessions` to resume, `--resume` from CLI
+- [x] **`/tokens`** — show token usage for the current session
+- [x] **Token counter** — shown automatically after each response
+- [x] **JSON config** — `pix3lcode_config.json` for URL, model, timeouts, context thresholds and prompt
+- [x] **Auto retry** — exponential backoff (2s, 4s, 8s…) for N configurable attempts
+- [x] **Configurable timeout** — `api_timeout` and `api_retries` in config file
+- [x] **Context truncation warning** — warns when context exceeds configured threshold (default 70%)
+- [x] **Profiles** — `./pix3lcode.sh --profile coding` loads `profiles/coding.json` with dedicated model and prompt
+- [x] **Project context** — reads `CONTEXT.md` from current directory and appends to system prompt
+- [x] **`/init`** — analyzes the project and generates `CONTEXT.md` automatically
+- [x] **Non-interactive mode** — `./pix3lcode.sh "prompt"` responds and exits; supports stdin pipe
+
+## Architecture
+
+- [x] **Split into modules** — split into `config.py`, `tools.py`, `git_tools.py`, `session.py`, `context.py`, `agent.py`, `main.py` as entry point.
+- [x] **Eliminate global state** — `cfg`, `MODEL`, `args`, `client` collected into `AppContext` dataclass and passed explicitly.
