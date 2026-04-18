@@ -146,6 +146,10 @@ def compact_messages(messages: list, ctx: AppContext) -> list:
         if role == "tool":
             continue
         content = m["content"] if isinstance(m, dict) else m.content
+        if isinstance(content, list):
+            # vision message: extract text parts only for summary
+            text_parts = [p["text"] for p in content if isinstance(p, dict) and p.get("type") == "text"]
+            content = " ".join(text_parts) + " [image]" * sum(1 for p in content if isinstance(p, dict) and p.get("type") == "image_url")
         if content:
             history_text.append(f"{role.upper()}: {content}")
 

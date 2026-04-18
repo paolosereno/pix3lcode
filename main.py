@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sys
+import re
+import base64
 import argparse
 from datetime import datetime
 from rich.markdown import Markdown
@@ -12,6 +14,46 @@ from config import load_config, AppContext
 from context import load_project_context, build_system_prompt
 from session import save_session, load_session, pick_session, latest_session_id
 from agent import agent_loop, compact_messages, check_context
+
+# ── Vision helpers ────────────────────────────────────────────────────────────
+
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+_MIME = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp", "bmp": "bmp"}
+
+
+def _extract_image_paths(text: str) -> list[str]:
+    candidates = re.findall(r'"([^"]+)"|\'([^\']+)\'|(\S+)', text)
+    paths = []
+    seen = set()
+    for groups in candidates:
+        for token in groups:
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            ext = os.path.splitext(token)[1].lower()
+            if ext in _IMAGE_EXTS:
+                expanded = os.path.expanduser(token)
+                if os.path.isfile(expanded):
+                    paths.append(expanded)
+    return paths
+
+
+def _build_user_content(text: str, image_paths: list[str], console) -> "str | list":
+    if not image_paths:
+        return text
+    content: list = [{"type": "text", "text": text}]
+    for path in image_paths:
+        ext = os.path.splitext(path)[1].lower().lstrip(".")
+        mime = _MIME.get(ext, ext)
+        try:
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/{mime};base64,{b64}"}})
+            console.print(f"  [dim]Image attached: {os.path.basename(path)}[/dim]")
+        except Exception as e:
+            console.print(f"  [yellow]Cannot attach {path}: {e}[/yellow]")
+    return content
+
 
 # ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -269,7 +311,9 @@ def main():
             save_session(messages, session_id, ctx)
             continue
 
-        messages.append({"role": "user", "content": user_input})
+        image_paths = _extract_image_paths(user_input)
+        user_content = _build_user_content(user_input, image_paths, ctx.console)
+        messages.append({"role": "user", "content": user_content})
 
         with ctx.console.status("[bold blue]Thinking…[/bold blue]", spinner="dots") as s:
             ctx._live_status = s
