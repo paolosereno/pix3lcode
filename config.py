@@ -22,6 +22,7 @@ DEFAULTS: dict = {
     "context_warn_threshold": 0.70,
     "max_tool_iterations": 20,
     "read_file_limit": 100_000,
+    "auto_yes": False,
 }
 
 CONFIG_PATHS = [
@@ -78,6 +79,7 @@ class AppContext:
     console: Console = field(init=False)
 
     def __post_init__(self):
+        self.auto_yes = self.auto_yes or bool(self.cfg.get("auto_yes", False))
         self.client = OpenAI(base_url=self.base_url, api_key="lm-studio")
         self.console = Console()
         self._live_status = None  # set by main loop when spinner is active

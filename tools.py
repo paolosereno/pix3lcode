@@ -161,7 +161,7 @@ def write_file(path: str, content: str, ctx: AppContext) -> str:
         f"\n  [bold yellow]⚠ Write file:[/bold yellow] [cyan]{path}[/cyan] "
         f"[dim]({len(content)} characters)[/dim]"
     )
-    if not ctx.confirm("  Proceed? [y/N]: "):
+    if not ctx.auto_yes and not ctx.confirm("  Proceed? [y/N]: "):
         return "Write cancelled by user."
     try:
         expanded = os.path.expanduser(path)
@@ -234,7 +234,7 @@ def patch_file(path: str, old_string: str, new_string: str, ctx: AppContext) -> 
     ctx.console.print(
         f"\n  [bold yellow]⚠ Patch file:[/bold yellow] [cyan]{path}[/cyan]"
     )
-    if not ctx.confirm("  Proceed? [y/N]: "):
+    if not ctx.auto_yes and not ctx.confirm("  Proceed? [y/N]: "):
         return "Patch cancelled by user."
     try:
         expanded = os.path.expanduser(path)
