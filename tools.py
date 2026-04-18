@@ -1,7 +1,6 @@
 import os
 import re
 import subprocess
-from prompt_toolkit import prompt
 from config import AppContext
 
 DANGEROUS_PATTERNS = [
@@ -10,6 +9,9 @@ DANGEROUS_PATTERNS = [
     r"\bkill\b", r"\bpkill\b", r"\bkillall\b",
     r"\bmv\b.*\/", r"\bformat\b", r"\bfdisk\b", r"\bparted\b",
     r">\s*/", r"\| ?tee\b",
+    r"\bpip\b.*install\b", r"--break-system-packages",
+    r"\bapt\b", r"\bapt-get\b", r"\bdnf\b", r"\byum\b",
+    r"\bcurl\b.*\|\s*(bash|sh)\b", r"\bwget\b.*\|\s*(bash|sh)\b",
 ]
 
 TOOL_DEFINITIONS = [
@@ -139,13 +141,28 @@ TOOL_DEFINITIONS = [
 
 def read_file(path: str, ctx: AppContext) -> str:
     try:
-        with open(os.path.expanduser(path), "r", encoding="utf-8") as f:
-            return f.read()
+        expanded = os.path.expanduser(path)
+        size = os.path.getsize(expanded)
+        limit = int(ctx.cfg.get("read_file_limit", 100_000))
+        with open(expanded, "r", encoding="utf-8") as f:
+            content = f.read(limit)
+        if size > limit:
+            truncated_kb = limit // 1024
+            total_kb = size // 1024
+            content += f"\n\n[…file truncated: showing first {truncated_kb}KB of {total_kb}KB]"
+            ctx.console.print(f"  [yellow]⚠ read_file: {path} is {total_kb}KB, truncated to {truncated_kb}KB[/yellow]")
+        return content
     except Exception as e:
         return f"ERROR: {e}"
 
 
 def write_file(path: str, content: str, ctx: AppContext) -> str:
+    ctx.console.print(
+        f"\n  [bold yellow]⚠ Write file:[/bold yellow] [cyan]{path}[/cyan] "
+        f"[dim]({len(content)} characters)[/dim]"
+    )
+    if not ctx.confirm("  Proceed? [y/N]: "):
+        return "Write cancelled by user."
     try:
         expanded = os.path.expanduser(path)
         parent = os.path.dirname(expanded)
@@ -185,11 +202,7 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
                 f"\n  [bold red]⚠ Potentially dangerous command:[/bold red]\n"
                 f"  [yellow]{command}[/yellow]"
             )
-            try:
-                answer = prompt("  Execute? [y/N]: ").strip().lower()
-            except (KeyboardInterrupt, EOFError):
-                answer = "n"
-            if answer not in ("y", "yes"):
+            if not ctx.confirm("  Execute? [y/N]: "):
                 return "Execution cancelled by user."
 
     try:
@@ -218,6 +231,11 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
 
 
 def patch_file(path: str, old_string: str, new_string: str, ctx: AppContext) -> str:
+    ctx.console.print(
+        f"\n  [bold yellow]⚠ Patch file:[/bold yellow] [cyan]{path}[/cyan]"
+    )
+    if not ctx.confirm("  Proceed? [y/N]: "):
+        return "Patch cancelled by user."
     try:
         expanded = os.path.expanduser(path)
         with open(expanded, "r", encoding="utf-8") as f:

@@ -102,7 +102,7 @@ def main():
             + (f"  profile: [magenta]{ctx.profile}[/magenta]" if ctx.profile else "")
             + (f"  [dim]session: {session_id}[/dim]" if resumed else "")
             + (f"\n[dim]Project context: CONTEXT.md loaded[/dim]" if load_project_context() else "") + "\n"
-            "[dim]/help  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
+            "[dim]/help  |  /undo  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
             border_style="cyan",
         )
     )
@@ -158,6 +158,7 @@ def main():
                 "[bold]/model[/bold]     show the active model and URL\n"
                 "[bold]/tokens[/bold]    show token usage for the current session\n"
                 "[bold]/sessions[/bold]  list saved sessions (number=resume, d<n>=delete)\n"
+                "[bold]/undo[/bold]      remove the last user+assistant exchange from history\n"
                 "[bold]/clear[/bold]     clear history and start a new session\n"
                 "[bold]/compact[/bold]   summarize the conversation to free up context\n"
                 "[bold]/init[/bold]      analyze the project and generate CONTEXT.md\n"
@@ -182,6 +183,25 @@ def main():
             ))
             continue
 
+        if user_input.lower() == "/undo":
+            non_system = [m for m in messages if (m["role"] if isinstance(m, dict) else m.role) != "system"]
+            if len(non_system) < 2:
+                ctx.console.print("[yellow]Nothing to undo.[/yellow]")
+            else:
+                # Remove messages from the end until we've removed the last user+assistant pair
+                removed = 0
+                while messages and removed < 2:
+                    m = messages[-1]
+                    role = m["role"] if isinstance(m, dict) else m.role
+                    if role in ("user", "assistant", "tool"):
+                        messages.pop()
+                        if role in ("user", "assistant"):
+                            removed += 1
+                    else:
+                        break
+                ctx.console.print("[dim]Last exchange removed.[/dim]")
+            continue
+
         if user_input.lower() == "/clear":
             messages = [{"role": "system", "content": build_system_prompt(ctx)}]
             session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -189,13 +209,16 @@ def main():
             continue
 
         if user_input.lower() == "/compact":
-            with ctx.console.status("[bold blue]Compacting…[/bold blue]", spinner="dots"):
+            with ctx.console.status("[bold blue]Compacting…[/bold blue]", spinner="dots") as s:
+                ctx._live_status = s
                 try:
                     messages = compact_messages(messages, ctx)
                 except KeyboardInterrupt:
                     ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                 except Exception as e:
                     ctx.console.print(f"[red]Error during /compact: {e}[/red]")
+                finally:
+                    ctx._live_status = None
             continue
 
         if user_input.lower() == "/init":
@@ -223,7 +246,8 @@ def main():
                 "Use write_file to save CONTEXT.md in the current directory."
             )
             messages.append({"role": "user", "content": init_prompt})
-            with ctx.console.status("[bold blue]Analyzing project…[/bold blue]", spinner="dots"):
+            with ctx.console.status("[bold blue]Analyzing project…[/bold blue]", spinner="dots") as s:
+                ctx._live_status = s
                 try:
                     reply, prompt_tok, completion_tok = agent_loop(messages, ctx)
                 except KeyboardInterrupt:
@@ -234,6 +258,8 @@ def main():
                     ctx.console.print(f"[red]Error during /init: {e}[/red]")
                     messages.pop()
                     continue
+                finally:
+                    ctx._live_status = None
             total_prompt_tokens += prompt_tok
             total_completion_tokens += completion_tok
             ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
@@ -245,7 +271,8 @@ def main():
 
         messages.append({"role": "user", "content": user_input})
 
-        with ctx.console.status("[bold blue]Thinking…[/bold blue]", spinner="dots"):
+        with ctx.console.status("[bold blue]Thinking…[/bold blue]", spinner="dots") as s:
+            ctx._live_status = s
             try:
                 reply, prompt_tok, completion_tok = agent_loop(messages, ctx)
             except KeyboardInterrupt:
@@ -256,6 +283,8 @@ def main():
                 ctx.console.print(f"[red]API error: {e}[/red]")
                 messages.pop()
                 continue
+            finally:
+                ctx._live_status = None
 
         total_prompt_tokens += prompt_tok
         total_completion_tokens += completion_tok

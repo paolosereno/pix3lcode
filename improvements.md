@@ -3,7 +3,7 @@
 ## Bug / robustness
 
 - [x] **`agent_loop` max iterations** — added `max_tool_iterations` (default 20) in config; loop stops with a warning if limit is reached.
-- [ ] **`read_file` size limit** — reading a large file dumps everything into context. Add a configurable limit (e.g. 100KB) with truncation and warning.
+- [x] **`read_file` size limit** — configurable `read_file_limit` (default 100KB); truncates with warning and adds message to context.
 - [x] **`import re` inside `_is_dangerous`** — moved to top of `tools.py`.
 - [x] **`loaded` possibly undefined** — fixed in refactored `main.py`: `loaded` is always initialized to `None` before the resume branch.
 - [x] **Spinner blocks confirmation prompt** — `ctx.confirm()` stops the Rich spinner before asking, restarts it after; fixes `execute_shell` and `git_commit` hanging silently.
@@ -18,8 +18,8 @@
 
 ## Medium priority
 
-- [ ] **`/undo`** — removes the last exchange (user + assistant) from history, useful when the response is wrong.
-- [ ] **Confirmation for `write_file` and `patch_file`** — currently only `execute_shell` asks confirmation, but writing/patching files is equally invasive.
+- [x] **`/undo`** — removes the last exchange (user + assistant + tool messages) from history.
+- [x] **Confirmation for `write_file` and `patch_file`** — both now ask confirmation before modifying files.
 - [ ] **Multiline input** — `Alt+Enter` to send multi-line blocks (e.g. code snippets).
 - [x] **`max_tool_iterations` in config** — exposed as config key, default 20.
 - [x] **`search_files` tool** — search text in files with regex (like grep)

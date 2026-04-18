@@ -1,6 +1,5 @@
 import os
 import subprocess
-from prompt_toolkit import prompt
 from config import AppContext
 
 TOOL_DEFINITIONS = [
@@ -190,11 +189,7 @@ def git_commit(message: str, files: list | None = None, add_all: bool = False, w
         f"  [dim]{preview_add}[/dim]\n"
         f"  [dim]git commit -m \"{message}\"[/dim]"
     )
-    try:
-        answer = prompt("  Proceed? [y/N]: ").strip().lower()
-    except (KeyboardInterrupt, EOFError):
-        answer = "n"
-    if answer not in ("y", "yes"):
+    if not ctx.confirm("  Proceed? [y/N]: "):
         return "Commit cancelled by user."
 
     try:

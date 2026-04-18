@@ -21,6 +21,7 @@ DEFAULTS: dict = {
     "context_limit": 80000,
     "context_warn_threshold": 0.70,
     "max_tool_iterations": 20,
+    "read_file_limit": 100_000,
 }
 
 CONFIG_PATHS = [
