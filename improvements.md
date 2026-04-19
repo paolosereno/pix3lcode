@@ -28,9 +28,9 @@
 
 ## Low priority
 
-- [ ] **`/export`** — export the current session to a readable markdown file.
-- [ ] **`/rename`** — rename the current session with a meaningful name instead of a timestamp.
-- [ ] **`--no-tools` flag** — start without tools (pure chat, saves tokens in system prompt).
+- [x] **`/export`** — export the current session to a readable markdown file in the current directory.
+- [x] **`/rename`** — rename the current session with a meaningful name instead of a timestamp.
+- [x] **`--no-tools` flag** — start without tools (pure chat, saves tokens); pass empty tools list to API.
 - [x] **`/cd <path>`** — change working directory during the session without exiting.
 - [x] **`/compact`** — summarize the conversation to free up context
 - [x] **`/clear`** — clear history and start a new session

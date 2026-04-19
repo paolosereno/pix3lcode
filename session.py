@@ -148,6 +148,52 @@ def pick_session(ctx: AppContext) -> list | None:
         return load_session(choice, ctx)
 
 
+def rename_session(old_id: str, new_id: str, ctx: AppContext) -> bool:
+    sessions_dir = os.path.expanduser(ctx.cfg["sessions_dir"])
+    old_path = os.path.join(sessions_dir, f"{old_id}.json")
+    new_path = os.path.join(sessions_dir, f"{new_id}.json")
+    if not os.path.exists(old_path):
+        return False
+    if os.path.exists(new_path):
+        return False
+    with open(old_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data["id"] = new_id
+    with open(new_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.remove(old_path)
+    return True
+
+
+def export_session(messages: list, session_id: str, model: str) -> str:
+    lines = [
+        f"# Pix3lCode — Session {session_id}",
+        f"**Model:** {model}",
+        f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "",
+        "---",
+        "",
+    ]
+    for m in messages:
+        role = m["role"] if isinstance(m, dict) else m.role
+        content = m["content"] if isinstance(m, dict) else (m.content or "")
+        if role == "system":
+            continue
+        if role == "tool":
+            continue
+        if role == "assistant" and not content:
+            continue
+        if isinstance(content, list):
+            text_parts = [p["text"] for p in content if isinstance(p, dict) and p.get("type") == "text"]
+            img_count = sum(1 for p in content if isinstance(p, dict) and p.get("type") == "image_url")
+            content = " ".join(text_parts)
+            if img_count:
+                content += f" *[{img_count} image(s) attached]*"
+        label = "**You:**" if role == "user" else "**Assistant:**"
+        lines.append(f"{label}\n\n{content}\n\n---\n")
+    return "\n".join(lines)
+
+
 def latest_session_id(ctx: AppContext) -> str | None:
     sessions_dir = os.path.expanduser(ctx.cfg["sessions_dir"])
     files = sorted(

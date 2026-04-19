@@ -7,7 +7,9 @@ import tools as tools_module
 import git_tools
 
 
-def _build_tools_list() -> list:
+def _build_tools_list(ctx: AppContext) -> list:
+    if ctx.no_tools:
+        return []
     return tools_module.TOOL_DEFINITIONS + git_tools.TOOL_DEFINITIONS
 
 
@@ -37,13 +39,11 @@ def _api_call_with_retry(messages: list, tools_list: list, ctx: AppContext) -> o
     last_exc = None
     for attempt in range(1, retries + 1):
         try:
-            return ctx.client.chat.completions.create(
-                model=ctx.model,
-                messages=messages,
-                tools=tools_list,
-                tool_choice="auto",
-                timeout=timeout,
-            )
+            kwargs = dict(model=ctx.model, messages=messages, timeout=timeout)
+            if tools_list:
+                kwargs["tools"] = tools_list
+                kwargs["tool_choice"] = "auto"
+            return ctx.client.chat.completions.create(**kwargs)
         except Exception as e:
             err_str = str(e)
             # LM Studio: template requires at least one user message
@@ -84,7 +84,7 @@ def check_context(total_prompt_tokens: int, ctx: AppContext) -> None:
 
 def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
     """Returns (reply, total_prompt_tokens, total_completion_tokens)."""
-    tools_list = _build_tools_list()
+    tools_list = _build_tools_list(ctx)
     dispatch = _build_dispatch(ctx)
     total_prompt = 0
     total_completion = 0

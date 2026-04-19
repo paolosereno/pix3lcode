@@ -102,6 +102,9 @@ git diff | ./pix3lcode.sh "scrivi un messaggio di commit"
 
 # Auto-confirm dangerous shell commands (for use in scripts)
 ./pix3lcode.sh --yes "pulisci la directory build"
+
+# Pure chat mode without tools (saves tokens in system prompt)
+./pix3lcode.sh --no-tools
 ```
 
 ### Optional: global alias
@@ -123,6 +126,8 @@ pix3lcode --resume
 | `/tokens` | Show token usage for the current session |
 | `/sessions` | List saved sessions and switch to one (d\<n\> to delete) |
 | `/undo` | Remove the last user+assistant exchange from history |
+| `/export` | Export the session to a markdown file in the current directory |
+| `/rename <name>` | Rename the current session |
 | `/cd <path>` | Change working directory (affects file and shell tools) |
 | `/compact` | Summarize the conversation to free up context |
 | `/init` | Analyze the project and generate `CONTEXT.md` |

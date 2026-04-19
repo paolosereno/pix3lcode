@@ -12,7 +12,7 @@ from prompt_toolkit.history import FileHistory
 
 from config import load_config, AppContext
 from context import load_project_context, build_system_prompt
-from session import save_session, load_session, pick_session, latest_session_id
+from session import save_session, load_session, pick_session, latest_session_id, rename_session, export_session
 from agent import agent_loop, compact_messages, check_context
 
 # ── Vision helpers ────────────────────────────────────────────────────────────
@@ -64,6 +64,7 @@ parser.add_argument("--resume", "-r", nargs="?", const="last", metavar="ID",
 parser.add_argument("--config", "-c", metavar="FILE", help="Path to an alternative config file")
 parser.add_argument("--profile", "-p", metavar="NAME", help="Profile to use (file in profiles/<name>.json)")
 parser.add_argument("--yes", "-y", action="store_true", help="Auto-confirm dangerous shell commands")
+parser.add_argument("--no-tools", action="store_true", help="Disable all tools (pure chat, saves tokens)")
 parser.add_argument("prompt_text", nargs="?", metavar="PROMPT", help="Non-interactive mode: run prompt and exit")
 args = parser.parse_args()
 
@@ -78,6 +79,7 @@ ctx = AppContext(
     base_url=cfg["base_url"],
     auto_yes=args.yes,
     profile=args.profile,
+    no_tools=args.no_tools,
 )
 
 # ── Non-interactive mode ──────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ def main():
             + (f"  profile: [magenta]{ctx.profile}[/magenta]" if ctx.profile else "")
             + (f"  [dim]session: {session_id}[/dim]" if resumed else "")
             + (f"\n[dim]Project context: CONTEXT.md loaded[/dim]" if load_project_context() else "") + "\n"
-            "[dim]/help  |  /undo  |  /cd  |  /clear  |  /compact  |  /sessions  |  /exit  |  Ctrl+C[/dim]",
+            "[dim]/help  |  /undo  |  /export  |  /rename  |  /cd  |  /clear  |  /compact  |  /sessions  |  /exit[/dim]",
             border_style="cyan",
         )
     )
@@ -200,9 +202,11 @@ def main():
                 "[bold]/model[/bold]     show the active model and URL\n"
                 "[bold]/tokens[/bold]    show token usage for the current session\n"
                 "[bold]/sessions[/bold]  list saved sessions (number=resume, d<n>=delete)\n"
-                "[bold]/undo[/bold]      remove the last user+assistant exchange from history\n"
-                "[bold]/cd <path>[/bold] change working directory (affects file and shell tools)\n"
-                "[bold]/clear[/bold]     clear history and start a new session\n"
+                "[bold]/undo[/bold]         remove the last user+assistant exchange from history\n"
+                "[bold]/export[/bold]       export the session to a markdown file\n"
+                "[bold]/rename <name>[/bold] rename the current session\n"
+                "[bold]/cd <path>[/bold]    change working directory (affects file and shell tools)\n"
+                "[bold]/clear[/bold]        clear history and start a new session\n"
                 "[bold]/compact[/bold]   summarize the conversation to free up context\n"
                 "[bold]/init[/bold]      analyze the project and generate CONTEXT.md\n"
                 "[bold]/exit[/bold]      save and exit\n\n"
@@ -224,6 +228,33 @@ def main():
                 title="[bold]Available commands[/bold]",
                 border_style="cyan",
             ))
+            continue
+
+        if user_input.lower() == "/export":
+            export_path = os.path.join(os.getcwd(), f"pix3lcode_{session_id}.md")
+            content = export_session(messages, session_id, ctx.model)
+            try:
+                with open(export_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                ctx.console.print(f"[dim]Session exported to: {export_path}[/dim]")
+            except Exception as e:
+                ctx.console.print(f"[red]Export failed: {e}[/red]")
+            continue
+
+        if user_input.lower().startswith("/rename"):
+            parts = user_input.split(maxsplit=1)
+            new_name = parts[1].strip() if len(parts) > 1 else ""
+            if not new_name:
+                try:
+                    new_name = prompt("  New session name: ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    continue
+            if new_name:
+                if rename_session(session_id, new_name, ctx):
+                    session_id = new_name
+                    ctx.console.print(f"[dim]Session renamed to: {new_name}[/dim]")
+                else:
+                    ctx.console.print("[red]Cannot rename: name already exists or session not saved yet.[/red]")
             continue
 
         if user_input.lower().startswith("/cd"):

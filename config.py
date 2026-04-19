@@ -75,6 +75,7 @@ class AppContext:
     base_url: str
     auto_yes: bool
     profile: str | None
+    no_tools: bool = False
     client: OpenAI = field(init=False)
     console: Console = field(init=False)
 
