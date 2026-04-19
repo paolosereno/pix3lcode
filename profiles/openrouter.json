@@ -1,0 +1,8 @@
+{
+  "base_url": "https://openrouter.ai/api/v1",
+  "api_key": "sk-or-YOUR_KEY_HERE",
+  "model": "qwen/qwen3-235b-a22b",
+  "context_limit": 40000,
+  "context_warn_threshold": 0.70,
+  "api_timeout": 120
+}

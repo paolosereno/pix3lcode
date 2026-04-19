@@ -112,9 +112,11 @@ def main():
     existing = load_existing(config_path)
     cfg = {**DEFAULTS, **existing}
 
-    # LM Studio URL
-    console.print("\n[bold]LM Studio[/bold]")
+    # API endpoint
+    console.print("\n[bold]API endpoint[/bold]")
+    console.print("  [dim]LM Studio: http://10.5.0.2:1234/v1  |  OpenRouter: https://openrouter.ai/api/v1[/dim]")
     cfg["base_url"] = ask("API URL", cfg["base_url"])
+    cfg["api_key"] = ask("API key (lm-studio for LM Studio, sk-or-... for OpenRouter)", cfg.get("api_key", "lm-studio"))
 
     # fetch models
     console.print(f"\n  [dim]Fetching models from {cfg['base_url']}…[/dim]")
@@ -180,6 +182,7 @@ def main():
         f"[bold green]Configuration saved![/bold green]\n\n"
         f"  Model:      [green]{cfg['model']}[/green]\n"
         f"  URL:        [dim]{cfg['base_url']}[/dim]\n"
+        f"  API key:    [dim]{'*' * 6 + cfg['api_key'][-4:] if len(cfg.get('api_key','')) > 6 else cfg.get('api_key','lm-studio')}[/dim]\n"
         f"  Context:    [cyan]{cfg['context_limit']:,}[/cyan] tokens "
         f"(warn at [cyan]{int(cfg['context_warn_threshold']*100)}%[/cyan])\n"
         f"  API:        timeout {cfg['api_timeout']}s, retry {cfg['api_retries']}x\n"

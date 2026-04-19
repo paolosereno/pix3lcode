@@ -8,6 +8,7 @@ from prompt_toolkit import prompt as pt_prompt
 
 DEFAULTS: dict = {
     "base_url": "http://10.5.0.2:1234/v1",
+    "api_key": "lm-studio",
     "model": "qwen/qwen3-5b",
     "system_prompt": (
         "You are an AI assistant expert in programming and Linux systems. "
@@ -81,7 +82,7 @@ class AppContext:
 
     def __post_init__(self):
         self.auto_yes = self.auto_yes or bool(self.cfg.get("auto_yes", False))
-        self.client = OpenAI(base_url=self.base_url, api_key="lm-studio")
+        self.client = OpenAI(base_url=self.base_url, api_key=self.cfg.get("api_key", "lm-studio"))
         self.console = Console()
         self._live_status = None  # set by main loop when spinner is active
 
