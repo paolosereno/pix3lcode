@@ -5,6 +5,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 ## Features
 
 - **Interactive chat** in the terminal with history (arrow keys)
+- **Response streaming** — text appears word by word as the model generates it
 - **Tool calling** — the model can autonomously use tools to complete tasks
 - **Vision support** — image paths in your message are attached automatically (JPEG, PNG, WebP, …); no special command needed
 - **Session management** — auto-save and resume previous conversations

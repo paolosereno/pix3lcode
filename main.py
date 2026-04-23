@@ -15,6 +15,28 @@ from context import load_project_context, build_system_prompt
 from session import save_session, load_session, pick_session, latest_session_id, rename_session, export_session
 from agent import agent_loop, compact_messages, check_context
 
+
+def _make_streaming_callback(ctx):
+    """
+    Returns (callback, did_stream).
+    callback(None) = start signal: stops spinner and prints header.
+    callback(chunk) = prints a text chunk to stdout.
+    did_stream() returns True if any text was streamed.
+    """
+    _started = []
+
+    def callback(chunk):
+        if chunk is None:
+            if not _started:
+                _started.append(True)
+                if ctx._live_status:
+                    ctx._live_status.stop()
+                ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
+        else:
+            print(chunk, end="", flush=True)
+
+    return callback, lambda: bool(_started)
+
 # ── Vision helpers ────────────────────────────────────────────────────────────
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -86,13 +108,24 @@ ctx = AppContext(
 
 def run_once(user_input: str) -> None:
     """Run a single prompt and print the response to stdout."""
+    streamed = []
+
+    def callback(chunk):
+        if chunk is None:
+            streamed.append(True)
+        else:
+            print(chunk, end="", flush=True)
+
     messages = [
         {"role": "system", "content": build_system_prompt(ctx)},
         {"role": "user", "content": user_input},
     ]
     try:
-        reply, _, _ = agent_loop(messages, ctx)
-        print(reply)
+        reply, _, _ = agent_loop(messages, ctx, text_callback=callback)
+        if streamed:
+            print()
+        else:
+            print(reply)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -333,10 +366,11 @@ def main():
                 "Use write_file to save CONTEXT.md in the current directory."
             )
             messages.append({"role": "user", "content": init_prompt})
+            init_callback, init_did_stream = _make_streaming_callback(ctx)
             with ctx.console.status("[bold blue]Analyzing project…[/bold blue]", spinner="dots") as s:
                 ctx._live_status = s
                 try:
-                    reply, prompt_tok, completion_tok = agent_loop(messages, ctx)
+                    reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=init_callback)
                 except KeyboardInterrupt:
                     ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                     messages.pop()
@@ -349,8 +383,11 @@ def main():
                     ctx._live_status = None
             total_prompt_tokens += prompt_tok
             total_completion_tokens += completion_tok
-            ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
-            ctx.console.print(Markdown(reply))
+            if init_did_stream():
+                print()
+            else:
+                ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
+                ctx.console.print(Markdown(reply))
             if os.path.exists(context_path):
                 ctx.console.print(f"[bold green]CONTEXT.md generated.[/bold green] It will be loaded automatically in future sessions.")
             save_session(messages, session_id, ctx)
@@ -360,10 +397,11 @@ def main():
         user_content = _build_user_content(user_input, image_paths, ctx.console)
         messages.append({"role": "user", "content": user_content})
 
+        stream_callback, did_stream = _make_streaming_callback(ctx)
         with ctx.console.status("[bold blue]Thinking…[/bold blue]", spinner="dots") as s:
             ctx._live_status = s
             try:
-                reply, prompt_tok, completion_tok = agent_loop(messages, ctx)
+                reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=stream_callback)
             except KeyboardInterrupt:
                 ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                 messages.pop()
@@ -379,8 +417,12 @@ def main():
         total_completion_tokens += completion_tok
         total_tok = total_prompt_tokens + total_completion_tokens
 
-        ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
-        ctx.console.print(Markdown(reply))
+        if did_stream():
+            print()
+        else:
+            ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
+            ctx.console.print(Markdown(reply))
+
         check_context(total_prompt_tokens, ctx)
         ctx.console.print(
             f"  [dim]tokens: prompt {prompt_tok:,} | completion {completion_tok:,} | "

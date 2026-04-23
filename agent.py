@@ -1,5 +1,7 @@
 import json
 import time
+import sys
+from types import SimpleNamespace
 from rich.markdown import Markdown
 from rich.panel import Panel
 from config import AppContext
@@ -33,20 +35,37 @@ def _has_user_message(messages: list) -> bool:
     )
 
 
-def _api_call_with_retry(messages: list, tools_list: list, ctx: AppContext) -> object:
+def _stream_api_call(
+    messages: list, tools_list: list, ctx: AppContext, text_callback=None
+) -> tuple:
+    """
+    Streaming API call.
+    Calls text_callback(None) once before the first text chunk (start signal),
+    then text_callback(chunk) for each text chunk.
+    Returns (content, tool_calls, prompt_tokens, completion_tokens).
+    tool_calls is None if the response has no tool calls.
+    """
     retries = int(ctx.cfg["api_retries"])
     timeout = int(ctx.cfg["api_timeout"])
     last_exc = None
+    stream = None
+
     for attempt in range(1, retries + 1):
         try:
-            kwargs = dict(model=ctx.model, messages=messages, timeout=timeout)
+            kwargs = dict(
+                model=ctx.model,
+                messages=messages,
+                timeout=timeout,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
             if tools_list:
                 kwargs["tools"] = tools_list
                 kwargs["tool_choice"] = "auto"
-            return ctx.client.chat.completions.create(**kwargs)
+            stream = ctx.client.chat.completions.create(**kwargs)
+            break
         except Exception as e:
             err_str = str(e)
-            # LM Studio: template requires at least one user message
             if "No user query found" in err_str and not _has_user_message(messages):
                 ctx.console.print(
                     "  [yellow]⚠ Model template requires a user message. "
@@ -57,9 +76,67 @@ def _api_call_with_retry(messages: list, tools_list: list, ctx: AppContext) -> o
             last_exc = e
             if attempt < retries:
                 wait = 2 ** attempt
-                ctx.console.print(f"  [yellow]Attempt {attempt}/{retries} failed ({e}). Retrying in {wait}s…[/yellow]")
+                ctx.console.print(
+                    f"  [yellow]Attempt {attempt}/{retries} failed ({e}). Retrying in {wait}s…[/yellow]"
+                )
                 time.sleep(wait)
-    raise last_exc
+
+    if stream is None:
+        raise last_exc
+
+    content = ""
+    tool_calls_raw = {}
+    prompt_tokens = 0
+    completion_tokens = 0
+    streaming_started = False
+
+    for chunk in stream:
+        if hasattr(chunk, "usage") and chunk.usage:
+            prompt_tokens = getattr(chunk.usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(chunk.usage, "completion_tokens", 0) or 0
+
+        if not chunk.choices:
+            continue
+
+        delta = chunk.choices[0].delta
+
+        if delta.content:
+            if not streaming_started:
+                if text_callback:
+                    text_callback(None)  # start signal
+                streaming_started = True
+            content += delta.content
+            if text_callback:
+                text_callback(delta.content)
+
+        if delta.tool_calls:
+            for tc_delta in delta.tool_calls:
+                idx = tc_delta.index
+                if idx not in tool_calls_raw:
+                    tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
+                if tc_delta.id:
+                    tool_calls_raw[idx]["id"] = tc_delta.id
+                if tc_delta.function:
+                    if tc_delta.function.name:
+                        tool_calls_raw[idx]["name"] += tc_delta.function.name
+                    if tc_delta.function.arguments:
+                        tool_calls_raw[idx]["arguments"] += tc_delta.function.arguments
+
+    if tool_calls_raw:
+        tool_calls = [
+            SimpleNamespace(
+                id=tool_calls_raw[idx]["id"],
+                function=SimpleNamespace(
+                    name=tool_calls_raw[idx]["name"],
+                    arguments=tool_calls_raw[idx]["arguments"],
+                ),
+            )
+            for idx in sorted(tool_calls_raw.keys())
+        ]
+    else:
+        tool_calls = None
+
+    return content, tool_calls, prompt_tokens, completion_tokens
 
 
 def check_context(total_prompt_tokens: int, ctx: AppContext) -> None:
@@ -82,7 +159,9 @@ def check_context(total_prompt_tokens: int, ctx: AppContext) -> None:
         )
 
 
-def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
+def agent_loop(
+    messages: list, ctx: AppContext, text_callback=None
+) -> tuple[str, int, int]:
     """Returns (reply, total_prompt_tokens, total_completion_tokens)."""
     tools_list = _build_tools_list(ctx)
     dispatch = _build_dispatch(ctx)
@@ -92,17 +171,14 @@ def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
     iteration = 0
 
     while True:
-        response = _api_call_with_retry(messages, tools_list, ctx)
+        content, tool_calls, prompt_tokens, completion_tokens = _stream_api_call(
+            messages, tools_list, ctx, text_callback=text_callback
+        )
 
-        if response.usage:
-            total_prompt += response.usage.prompt_tokens
-            total_completion += response.usage.completion_tokens
+        total_prompt += prompt_tokens
+        total_completion += completion_tokens
 
-        choice = response.choices[0]
-        msg = choice.message
-
-        if not msg.tool_calls:
-            content = msg.content or ""
+        if not tool_calls:
             messages.append({"role": "assistant", "content": content})
             return content, total_prompt, total_completion
 
@@ -111,13 +187,27 @@ def agent_loop(messages: list, ctx: AppContext) -> tuple[str, int, int]:
             ctx.console.print(
                 f"  [bold red]⚠ Tool iteration limit reached ({max_iterations}). Stopping.[/bold red]"
             )
-            content = msg.content or f"[Stopped after {max_iterations} tool calls]"
+            content = content or f"[Stopped after {max_iterations} tool calls]"
             messages.append({"role": "assistant", "content": content})
             return content, total_prompt, total_completion
 
-        messages.append(msg)
+        messages.append({
+            "role": "assistant",
+            "content": content or None,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in tool_calls
+            ],
+        })
 
-        for tc in msg.tool_calls:
+        for tc in tool_calls:
             name = tc.function.name
             try:
                 tool_args = json.loads(tc.function.arguments)
@@ -147,9 +237,10 @@ def compact_messages(messages: list, ctx: AppContext) -> list:
             continue
         content = m["content"] if isinstance(m, dict) else m.content
         if isinstance(content, list):
-            # vision message: extract text parts only for summary
             text_parts = [p["text"] for p in content if isinstance(p, dict) and p.get("type") == "text"]
-            content = " ".join(text_parts) + " [image]" * sum(1 for p in content if isinstance(p, dict) and p.get("type") == "image_url")
+            content = " ".join(text_parts) + " [image]" * sum(
+                1 for p in content if isinstance(p, dict) and p.get("type") == "image_url"
+            )
         if content:
             history_text.append(f"{role.upper()}: {content}")
 

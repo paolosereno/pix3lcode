@@ -10,7 +10,7 @@
 
 ## High priority
 
-- [ ] **Response streaming** — text appears word by word instead of waiting for the full response. Most impactful UX improvement.
+- [x] **Response streaming** — text appears word by word instead of waiting for the full response. Most impactful UX improvement.
 - [x] **Shell confirmation** — asks confirmation for dangerous commands (`rm`, `sudo`, `kill`, etc.)
 - [x] **`patch_file` tool** — modifies only a portion of a file via old→new replacement
 - [x] **Git tools** — `git_status`, `git_diff`, `git_log`, `git_commit` (with user confirmation)
