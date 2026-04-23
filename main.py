@@ -31,9 +31,13 @@ def _make_streaming_callback(ctx):
                 _started.append(True)
                 if ctx._live_status:
                     ctx._live_status.stop()
-                ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
+                # Write directly to the console's underlying file to avoid
+                # Rich's buffering/newline handling interfering with streaming
+                ctx.console.file.write("\n\033[1;34mAssistant:\033[0m\n")
+                ctx.console.file.flush()
         else:
-            print(chunk, end="", flush=True)
+            ctx.console.file.write(chunk)
+            ctx.console.file.flush()
 
     return callback, lambda: bool(_started)
 
