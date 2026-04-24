@@ -21,7 +21,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 
 | Tool | Description |
 |---|---|
-| `read_file` | Read any file from the filesystem (truncates at configurable limit) |
+| `read_file` | Read any file from the filesystem, including PDF text extraction (truncates at configurable limit) |
 | `write_file` | Write or create a file (asks confirmation) |
 | `patch_file` | Replace a specific portion of a file (old → new, asks confirmation) |
 | `list_directory` | List files and folders in a directory |
@@ -37,6 +37,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 - Python 3.11+
 - [LM Studio](https://lmstudio.ai/) running with a model that supports tool calling (e.g. Qwen3, Devstral)
 - For vision: a multimodal model loaded in LM Studio (e.g. Qwen2-VL, LLaVA)
+- For PDF reading: `pypdf` (installed automatically via `requirements.txt`)
 
 ## Installation
 
