@@ -4,3 +4,4 @@ __pycache__/
 *.pyo
 ~/.llm_cli_sessions/
 CONTEXT.md
+improvements.md
