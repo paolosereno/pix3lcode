@@ -144,13 +144,34 @@ def read_file(path: str, ctx: AppContext) -> str:
         expanded = os.path.expanduser(path)
         size = os.path.getsize(expanded)
         limit = int(ctx.cfg.get("read_file_limit", 100_000))
-        with open(expanded, "r", encoding="utf-8") as f:
-            content = f.read(limit)
-        if size > limit:
+
+        if expanded.lower().endswith(".pdf"):
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(expanded)
+                content = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+            except ImportError:
+                return "ERROR: 'pypdf' library is not installed. Please install it to read PDF files."
+            except Exception as e:
+                return f"ERROR reading PDF: {e}"
+        else:
+            with open(expanded, "r", encoding="utf-8") as f:
+                content = f.read(limit)
+
+        # For PDFs, we might have read the whole thing, so we apply the limit here too
+        if len(content) > limit:
+            content = content[:limit]
             truncated_kb = limit // 1024
             total_kb = size // 1024
             content += f"\n\n[…file truncated: showing first {truncated_kb}KB of {total_kb}KB]"
             ctx.console.print(f"  [yellow]⚠ read_file: {path} is {total_kb}KB, truncated to {truncated_kb}KB[/yellow]")
+        elif size > limit and not expanded.lower().endswith(".pdf"):
+            # This is the original logic for text files where we only read 'limit' bytes
+            truncated_kb = limit // 1024
+            total_kb = size // 1024
+            content += f"\n\n[…file truncated: showing first {truncated_kb}KB of {total_kb}KB]"
+            ctx.console.print(f"  [yellow]⚠ read_file: {path} is {total_kb}KB, truncated to {truncated_kb}KB[/yellow]")
+
         return content
     except Exception as e:
         return f"ERROR: {e}"
@@ -205,6 +226,11 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
             if not ctx.confirm("  Execute? [y/N]: "):
                 return "Execution cancelled by user."
 
+    venv_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin")
+    env = os.environ.copy()
+    env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
+    env["VIRTUAL_ENV"] = os.path.dirname(venv_bin)
+
     try:
         result = subprocess.run(
             command,
@@ -213,6 +239,7 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
             text=True,
             timeout=ctx.cfg["shell_timeout"],
             cwd=workdir,
+            env=env,
         )
         out = result.stdout.rstrip()
         err = result.stderr.rstrip()
