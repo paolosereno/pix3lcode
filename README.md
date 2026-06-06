@@ -146,6 +146,8 @@ Copy `pix3lcode_config.json` to your project directory or to `~/.pix3lcode_confi
 
 **Priority order:** project directory > home directory > built-in defaults
 
+> **Note:** `pix3lcode_config.json` may contain API keys — add it to `.gitignore` to avoid committing secrets.
+
 ```json
 {
   "base_url": "http://10.5.0.2:1234/v1",
