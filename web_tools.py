@@ -55,6 +55,12 @@ TOOL_DEFINITIONS = [
 
 
 def _get_tavily_key(ctx: AppContext) -> str | None:
+    """Ottieni la chiave API Tavily dalla configurazione o dalle environment variable.
+
+    :param ctx: Contesto dell'applicazione con accesso alla configurazione
+    :return: La chiave API Tavily o None se non configurata
+    :rtype: Optional[str]
+    """
     return ctx.cfg.get("tavily_api_key") or os.environ.get("TAVILY_API_KEY")
 
 
