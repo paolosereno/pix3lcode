@@ -91,6 +91,7 @@ def _stream_api_call(
     prompt_tokens = 0
     completion_tokens = 0
     streaming_started = False
+    _think_depth = 0  # tracks nesting of <think> blocks
 
     for chunk in stream:
         if hasattr(chunk, "usage") and chunk.usage:
@@ -102,14 +103,38 @@ def _stream_api_call(
 
         delta = chunk.choices[0].delta
 
+        # reasoning_content (LM Studio / Qwen3 thinking field) — discard silently
+        if getattr(delta, "reasoning_content", None):
+            continue
+
         if delta.content:
-            if not streaming_started:
+            raw = delta.content
+
+            # Strip <think>...</think> blocks streamed inline in delta.content.
+            # We accumulate a filtered string chunk by chunk using a depth counter.
+            filtered = ""
+            i = 0
+            while i < len(raw):
+                if raw[i:i+7].lower() == "<think>":
+                    _think_depth += 1
+                    i += 7
+                elif raw[i:i+8].lower() == "</think>":
+                    _think_depth = max(0, _think_depth - 1)
+                    i += 8
+                elif _think_depth == 0:
+                    filtered += raw[i]
+                    i += 1
+                else:
+                    i += 1
+
+            content += filtered
+            if filtered:
+                if not streaming_started:
+                    if text_callback:
+                        text_callback(None)  # start signal
+                    streaming_started = True
                 if text_callback:
-                    text_callback(None)  # start signal
-                streaming_started = True
-            content += delta.content
-            if text_callback:
-                text_callback(delta.content)
+                    text_callback(filtered)
 
         if delta.tool_calls:
             for tc_delta in delta.tool_calls:

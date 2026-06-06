@@ -1,3 +1,3 @@
 #!/bin/bash
-cd "$(dirname "$0")"
-.venv/bin/python main.py "$@"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/.venv/bin/python" "$SCRIPT_DIR/main.py" "$@"
