@@ -7,17 +7,19 @@ from rich.panel import Panel
 from config import AppContext
 import tools as tools_module
 import git_tools
+import web_tools
 
 
 def _build_tools_list(ctx: AppContext) -> list:
     if ctx.no_tools:
         return []
-    return tools_module.TOOL_DEFINITIONS + git_tools.TOOL_DEFINITIONS
+    return tools_module.TOOL_DEFINITIONS + git_tools.TOOL_DEFINITIONS + web_tools.TOOL_DEFINITIONS
 
 
 def _build_dispatch(ctx: AppContext) -> dict:
     dispatch = tools_module.make_dispatch(ctx)
     dispatch.update(git_tools.make_dispatch(ctx))
+    dispatch.update(web_tools.make_dispatch(ctx))
     return dispatch
 
 

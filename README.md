@@ -27,6 +27,8 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 | `list_directory` | List files and folders in a directory |
 | `execute_shell` | Run a Linux shell command (asks confirmation for dangerous ones) |
 | `search_files` | Search text in files with regex, like grep |
+| `web_search` | Search the internet via Tavily (documentation, Stack Overflow, GitHub issues…) |
+| `fetch_url` | Fetch and read the text content of a web page |
 | `git_status` | Show git repository status |
 | `git_diff` | Show diff (staged or unstaged) |
 | `git_log` | Show commit history |
@@ -38,6 +40,7 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 - [LM Studio](https://lmstudio.ai/) running with a model that supports tool calling (e.g. Qwen3, Devstral)
 - For vision: a multimodal model loaded in LM Studio (e.g. Qwen2-VL, LLaVA)
 - For PDF reading: `pypdf` (installed automatically via `requirements.txt`)
+- For web search: a [Tavily](https://app.tavily.com) API key (free tier: 2000 queries/month)
 
 ## Installation
 
@@ -170,6 +173,7 @@ Copy `pix3lcode_config.json` to your project directory or to `~/.pix3lcode_confi
 | `max_tool_iterations` | `20` | Max tool calls per response before stopping |
 | `read_file_limit` | `100000` | Max bytes read from a file (truncates with warning) |
 | `system_prompt` | *(built-in)* | System prompt for the model |
+| `tavily_api_key` | *(none)* | Tavily API key for `web_search` (or set `TAVILY_API_KEY` env var) |
 
 ## Project context
 
@@ -284,6 +288,20 @@ Sessions are saved automatically to `~/.pix3lcode_sessions/` after every exchang
 ```
 
 You can also switch sessions mid-conversation with `/sessions`.
+
+## Web search
+
+The `web_search` tool lets the model search the internet for up-to-date information during a task — documentation, Stack Overflow answers, GitHub issues, library changelogs, and more. After finding relevant links, it can use `fetch_url` to read the full content of any page.
+
+To enable it, add your Tavily API key to `pix3lcode_config.json`:
+
+```json
+{
+  "tavily_api_key": "tvly-..."
+}
+```
+
+Or set the environment variable `TAVILY_API_KEY`. Get a free key at [app.tavily.com](https://app.tavily.com) (2000 queries/month on the free tier).
 
 ## Security
 
