@@ -183,7 +183,7 @@ def main():
             + (f"  profile: [magenta]{ctx.profile}[/magenta]" if ctx.profile else "")
             + (f"  [dim]session: {session_id}[/dim]" if resumed else "")
             + (f"\n[dim]Project context: CONTEXT.md loaded[/dim]" if load_project_context() else "") + "\n"
-            "[dim]/help  |  /undo  |  /export  |  /rename  |  /cd  |  /clear  |  /compact  |  /sessions  |  /exit[/dim]",
+            "[dim]/help  |  /undo  |  /export  |  /rename  |  /cd  |  /clear  |  /compact  |  /sessions  |  /doxygen  |  /exit[/dim]",
             border_style="cyan",
         )
     )
@@ -246,6 +246,7 @@ def main():
                 "[bold]/clear[/bold]        clear history and start a new session\n"
                 "[bold]/compact[/bold]   summarize the conversation to free up context\n"
                 "[bold]/init[/bold]      analyze the project and generate CONTEXT.md\n"
+                "[bold]/doxygen [path][/bold]  add Doxygen comments to a file or directory\n"
                 "[bold]/exit[/bold]      save and exit\n\n"
                 "[bold cyan]Available tools for the model:[/bold cyan]\n"
                 "  [cyan]read_file[/cyan]      read a file\n"
@@ -343,6 +344,59 @@ def main():
                     ctx.console.print(f"[red]Error during /compact: {e}[/red]")
                 finally:
                     ctx._live_status = None
+            continue
+
+        if user_input.lower().startswith("/doxygen"):
+            parts = user_input.split(maxsplit=1)
+            target = parts[1].strip() if len(parts) > 1 else ""
+            if not target:
+                try:
+                    target = prompt("  File or directory to document (default: current directory): ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    continue
+            if not target:
+                target = os.getcwd()
+
+            doxygen_prompt = (
+                f"Add Doxygen-style documentation comments to the source file(s) at '{target}'.\n\n"
+                "Instructions:\n"
+                "1. If a directory is given, use list_directory to find source files "
+                "   (e.g. *.py, *.c, *.cpp, *.h), then process each one.\n"
+                "2. For each file, use read_file to read its content.\n"
+                "3. Identify all functions, methods, and classes that are missing "
+                "   documentation comments.\n"
+                "4. Add comments in the correct format for the language:\n"
+                "   - Python: docstrings with :param name:, :type name:, :return:, :rtype:.\n"
+                "   - C/C++/header: /** @brief ... @param ... @return ... */ before each function.\n"
+                "   - Other languages: use the most appropriate Doxygen-compatible format.\n"
+                "5. Do NOT modify existing documentation comments, only add missing ones.\n"
+                "6. Use patch_file to apply each change. Prefer small targeted patches.\n"
+                "7. When done, report which files and functions were documented."
+            )
+            messages.append({"role": "user", "content": doxygen_prompt})
+            doxy_callback, doxy_did_stream = _make_streaming_callback(ctx)
+            with ctx.console.status("[bold blue]Generating Doxygen comments…[/bold blue]", spinner="dots") as s:
+                ctx._live_status = s
+                try:
+                    reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=doxy_callback)
+                except KeyboardInterrupt:
+                    ctx.console.print("\n[yellow]Cancelled.[/yellow]")
+                    messages.pop()
+                    continue
+                except Exception as e:
+                    ctx.console.print(f"[red]Error during /doxygen: {e}[/red]")
+                    messages.pop()
+                    continue
+                finally:
+                    ctx._live_status = None
+            total_prompt_tokens += prompt_tok
+            total_completion_tokens += completion_tok
+            if doxy_did_stream():
+                print()
+            else:
+                ctx.console.print("\n[bold blue]Assistant:[/bold blue]")
+                ctx.console.print(Markdown(reply))
+            save_session(messages, session_id, ctx)
             continue
 
         if user_input.lower() == "/init":

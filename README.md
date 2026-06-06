@@ -136,6 +136,7 @@ pix3lcode --resume
 | `/cd <path>` | Change working directory (affects file and shell tools) |
 | `/compact` | Summarize the conversation to free up context |
 | `/init` | Analyze the project and generate `CONTEXT.md` |
+| `/doxygen [path]` | Add Doxygen comments to a file or directory (asks if no path given) |
 | `/clear` | Clear history and start a new session |
 | `/exit` | Save and exit |
 | `Ctrl+C` | Save and exit |
