@@ -214,6 +214,15 @@ def _evict_large_tool_results(messages: list, threshold: int) -> None:
         )
 
 
+def _stagnation_key(name: str, args: dict) -> str:
+    """Cheap key identifying what a tool call is doing, for stagnation detection."""
+    if name == "execute_shell":
+        return args.get("command", "")[:150]
+    if name in ("read_file", "write_file", "patch_file"):
+        return args.get("path", "")
+    return str(sorted(args.items()))[:150]
+
+
 def agent_loop(
     messages: list, ctx: AppContext, text_callback=None
 ) -> tuple[str, int, int]:
@@ -224,12 +233,32 @@ def agent_loop(
     total_completion = 0
     max_iterations = int(ctx.cfg.get("max_tool_iterations", 20))
     iteration = 0
+    last_prompt_tokens = 0  # context size of the most recent API call
+    consecutive_sig = None  # (tool_name, args_key) of the last tool call
+    consecutive_out = None  # first 300 chars of the last tool call's output
+    consecutive_count = 0
 
     while True:
+        # ── Context brake ──────────────────────────────────────────────────────
+        ctx_limit = int(ctx.cfg.get("context_limit", 0))
+        ctx_threshold = float(ctx.cfg.get("agent_context_limit_threshold", 0.95))
+        if ctx_limit > 0 and last_prompt_tokens > 0 and last_prompt_tokens >= ctx_limit * ctx_threshold:
+            pct = int(last_prompt_tokens / ctx_limit * 100)
+            ctx.console.print(
+                f"  [bold red]⚠ Context limit reached mid-task[/bold red] "
+                f"[red]({last_prompt_tokens:,} / {ctx_limit:,} tokens, {pct}%). "
+                f"Run /compact and resume.[/red]"
+            )
+            stop_msg = f"[Task stopped: context at {pct}% of limit. Run /compact and resume.]"
+            messages.append({"role": "assistant", "content": stop_msg})
+            _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
+            return stop_msg, total_prompt, total_completion
+
         content, tool_calls, prompt_tokens, completion_tokens = _stream_api_call(
             messages, tools_list, ctx, text_callback=text_callback
         )
 
+        last_prompt_tokens = prompt_tokens
         total_prompt += prompt_tokens
         total_completion += completion_tokens
 
@@ -264,6 +293,7 @@ def agent_loop(
             ],
         })
 
+        stagnation_n = int(ctx.cfg.get("stagnation_threshold", 3))
         for tc in tool_calls:
             name = tc.function.name
             try:
@@ -278,6 +308,29 @@ def agent_loop(
             ctx.console.print(f"  [dim]{preview}[/dim]")
 
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+            # ── Stagnation detection (AND: same args AND same output) ───────────
+            args_key = _stagnation_key(name, tool_args)
+            out_snippet = result[:300]
+            if consecutive_sig == (name, args_key) and consecutive_out == out_snippet:
+                consecutive_count += 1
+            else:
+                consecutive_sig = (name, args_key)
+                consecutive_out = out_snippet
+                consecutive_count = 1
+            if consecutive_count >= stagnation_n:
+                ctx.console.print(
+                    f"  [bold red]⚠ Stagnation detected:[/bold red] "
+                    f"[red]{name!r} called {consecutive_count}× with identical args and output. "
+                    f"Stopping to avoid an unproductive loop.[/red]"
+                )
+                stop_msg = (
+                    f"[Task stopped: '{name}' repeated {consecutive_count}× with identical "
+                    f"args and output — likely an unproductive loop.]"
+                )
+                messages.append({"role": "assistant", "content": stop_msg})
+                _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
+                return stop_msg, total_prompt, total_completion
 
 
 def compact_messages(messages: list, ctx: AppContext) -> list:

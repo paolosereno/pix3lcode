@@ -32,6 +32,8 @@ DEFAULTS: dict = {
     "build_output_max_lines": 120,
     "file_cache_max_files": 50,
     "file_cache_max_bytes": 10_000_000,
+    "agent_context_limit_threshold": 0.95,
+    "stagnation_threshold": 3,
 }
 
 CONFIG_PATHS = [
