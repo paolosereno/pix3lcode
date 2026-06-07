@@ -14,6 +14,11 @@ DANGEROUS_PATTERNS = [
     r"\bcurl\b.*\|\s*(bash|sh)\b", r"\bwget\b.*\|\s*(bash|sh)\b",
 ]
 
+_LINKER_RE = re.compile(
+    r"undefined reference|vtable for|DSO missing|cannot find -l|ld returned",
+    re.IGNORECASE,
+)
+
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -38,7 +43,7 @@ TOOL_DEFINITIONS = [
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Path of the file to write"},
-                    "content": {"type": "string", "description": "Content to write to the file"},
+                    "content": {"type": "string", "description": "Content to write to the file. Use real newline characters (not literal \\n escape sequences)."},
                 },
                 "required": ["path", "content"],
             },
@@ -136,12 +141,56 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_known_files",
+            "description": (
+                "List all files read in this session with their sizes. "
+                "Check this before re-reading a file to confirm it is already cached."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
+
+
+def _cache_store(ctx: AppContext, abs_path: str, content: str) -> None:
+    """Insert or refresh a file entry in the LRU cache, evicting oldest if over limits."""
+    max_files = int(ctx.cfg.get("file_cache_max_files", 50))
+    max_bytes = int(ctx.cfg.get("file_cache_max_bytes", 10_000_000))
+    size_bytes = len(content.encode("utf-8"))
+    # Remove existing entry so re-insertion lands at the MRU end
+    ctx.file_registry.pop(abs_path, None)
+    current_bytes = sum(e["size"] for e in ctx.file_registry.values())
+    while ctx.file_registry and (
+        len(ctx.file_registry) >= max_files or current_bytes + size_bytes > max_bytes
+    ):
+        oldest = next(iter(ctx.file_registry))
+        current_bytes -= ctx.file_registry[oldest]["size"]
+        del ctx.file_registry[oldest]
+    try:
+        mtime = os.path.getmtime(abs_path)
+    except OSError:
+        mtime = 0.0
+    ctx.file_registry[abs_path] = {"mtime": mtime, "size": size_bytes, "content": content}
 
 
 def read_file(path: str, ctx: AppContext) -> str:
     try:
-        expanded = os.path.expanduser(path)
+        expanded = os.path.abspath(os.path.expanduser(path))
+
+        # Cache hit: one stat() call to check freshness, no disk read if unchanged
+        if expanded in ctx.file_registry:
+            entry = ctx.file_registry[expanded]
+            try:
+                if os.path.getmtime(expanded) == entry["mtime"]:
+                    # Move to MRU end
+                    ctx.file_registry[expanded] = ctx.file_registry.pop(expanded)
+                    return entry["content"]
+            except OSError:
+                pass
+
         size = os.path.getsize(expanded)
         limit = int(ctx.cfg.get("read_file_limit", 100_000))
 
@@ -166,18 +215,22 @@ def read_file(path: str, ctx: AppContext) -> str:
             content += f"\n\n[…file truncated: showing first {truncated_kb}KB of {total_kb}KB]"
             ctx.console.print(f"  [yellow]⚠ read_file: {path} is {total_kb}KB, truncated to {truncated_kb}KB[/yellow]")
         elif size > limit and not expanded.lower().endswith(".pdf"):
-            # This is the original logic for text files where we only read 'limit' bytes
             truncated_kb = limit // 1024
             total_kb = size // 1024
             content += f"\n\n[…file truncated: showing first {truncated_kb}KB of {total_kb}KB]"
             ctx.console.print(f"  [yellow]⚠ read_file: {path} is {total_kb}KB, truncated to {truncated_kb}KB[/yellow]")
 
+        _cache_store(ctx, expanded, content)
         return content
     except Exception as e:
         return f"ERROR: {e}"
 
 
 def write_file(path: str, content: str, ctx: AppContext) -> str:
+    # If the model double-escaped newlines (literal \n with no real newlines), fix them.
+    if "\n" not in content and "\\n" in content:
+        content = content.replace("\\n", "\n").replace("\\t", "\t")
+        ctx.console.print("  [yellow]⚠ Auto-converted literal \\\\n to newlines in file content[/yellow]")
     ctx.console.print(
         f"\n  [bold yellow]⚠ Write file:[/bold yellow] [cyan]{path}[/cyan] "
         f"[dim]({len(content)} characters)[/dim]"
@@ -212,6 +265,82 @@ def list_directory(path: str = ".", ctx: AppContext = None) -> str:
 
 def _is_dangerous(command: str) -> bool:
     return any(re.search(p, command) for p in DANGEROUS_PATTERNS)
+
+
+def _is_build_command(command: str, ctx: AppContext) -> bool:
+    keywords = ctx.cfg.get("build_filter_keywords", [])
+    cmd_lower = command.lower()
+    return any(kw in cmd_lower for kw in keywords)
+
+
+def _filter_build_output(output: str, ctx: AppContext) -> str:
+    """
+    Filter build/compiler output to keep only significant lines.
+    Linker error blocks (undefined reference, vtable for, etc.) are kept in full
+    up to the next blank line so that adjacent symbol names are not lost.
+    """
+    lines = output.splitlines()
+    total = len(lines)
+    patterns = [re.compile(p, re.IGNORECASE) for p in ctx.cfg.get("build_filter_patterns", [])]
+    context_n = int(ctx.cfg.get("build_filter_context_lines", 2))
+    max_lines = int(ctx.cfg.get("build_output_max_lines", 120))
+
+    # Build blank-line-separated block map so linker errors keep their full block
+    blocks, block_start = [], None
+    for idx, line in enumerate(lines):
+        if line.strip():
+            if block_start is None:
+                block_start = idx
+        elif block_start is not None:
+            blocks.append((block_start, idx - 1))
+            block_start = None
+    if block_start is not None:
+        blocks.append((block_start, total - 1))
+
+    line_block = {}
+    for start, end in blocks:
+        for i in range(start, end + 1):
+            line_block[i] = (start, end)
+
+    keep = set()
+    for idx, line in enumerate(lines):
+        if _LINKER_RE.search(line):
+            # Keep the entire blank-line-delimited block so symbol names on adjacent
+            # lines (e.g. "In function `...'") are not lost
+            if idx in line_block:
+                bstart, bend = line_block[idx]
+                keep.update(range(bstart, bend + 1))
+            else:
+                keep.add(idx)
+        elif any(p.search(line) for p in patterns):
+            keep.update(range(max(0, idx - context_n), min(total, idx + context_n + 1)))
+
+    if not keep:
+        return f"[Build output: {total} lines, no errors or warnings found.]"
+
+    if len(keep) == total:
+        # Nothing filtered — only enforce max_lines if needed
+        if total <= max_lines:
+            return output
+        return (
+            f"[Build output: showing first {max_lines}/{total} lines]\n"
+            + "\n".join(lines[:max_lines])
+            + f"\n[…{total - max_lines} more lines]"
+        )
+
+    result = []
+    prev = None
+    for idx in sorted(keep):
+        if prev is not None and idx > prev + 1:
+            result.append("[…]")
+        result.append(lines[idx])
+        prev = idx
+
+    if len(result) > max_lines:
+        result = result[:max_lines]
+        result.append(f"[…truncated at {max_lines} lines; {total} total]")
+
+    return f"[Build output: {len(result)}/{total} significant lines]\n" + "\n".join(result)
 
 
 def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
@@ -250,7 +379,14 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
             parts.append(f"[stderr]\n{err}")
         if result.returncode != 0:
             parts.append(f"[exit code: {result.returncode}]")
-        return "\n".join(parts) if parts else "(no output)"
+        combined = "\n".join(parts) if parts else "(no output)"
+        if (
+            combined != "(no output)"
+            and ctx.cfg.get("build_filter_enabled", True)
+            and _is_build_command(command, ctx)
+        ):
+            combined = _filter_build_output(combined, ctx)
+        return combined
     except subprocess.TimeoutExpired:
         return f"ERROR: command timed out ({ctx.cfg['shell_timeout']}s)"
     except Exception as e:
@@ -313,6 +449,16 @@ def search_files(
         return f"ERROR: {e}"
 
 
+def list_known_files(ctx: AppContext) -> str:
+    if not ctx.file_registry:
+        return "No files have been read in this session."
+    lines = [
+        f"{path}  ({entry['size'] / 1024:.1f} KB)"
+        for path, entry in ctx.file_registry.items()
+    ]
+    return "\n".join(lines)
+
+
 def make_dispatch(ctx: AppContext) -> dict:
     return {
         "read_file": lambda a: read_file(a["path"], ctx),
@@ -328,4 +474,5 @@ def make_dispatch(ctx: AppContext) -> dict:
             a.get("context_lines", 0),
             ctx,
         ),
+        "list_known_files": lambda a: list_known_files(ctx),
     }

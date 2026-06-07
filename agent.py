@@ -186,6 +186,34 @@ def check_context(total_prompt_tokens: int, ctx: AppContext) -> None:
         )
 
 
+def _evict_large_tool_results(messages: list, threshold: int) -> None:
+    """Replace large tool results with compact stubs to reclaim context space."""
+    call_map = {}
+    for m in messages:
+        if isinstance(m, dict) and m.get("role") == "assistant":
+            for tc in m.get("tool_calls", []):
+                call_map[tc["id"]] = tc["function"]
+
+    for m in messages:
+        if not isinstance(m, dict) or m.get("role") != "tool":
+            continue
+        content = m.get("content", "")
+        if not isinstance(content, str) or len(content) <= threshold:
+            continue
+        fn = call_map.get(m.get("tool_call_id", ""), {})
+        fname = fn.get("name", "tool") if fn else "tool"
+        try:
+            args = json.loads(fn.get("arguments", "{}") if fn else "{}")
+            path_hint = args.get("path", "")
+        except (json.JSONDecodeError, AttributeError):
+            path_hint = ""
+        path_part = f'("{path_hint}") ' if path_hint else " "
+        m["content"] = (
+            f"[Result evicted ({len(content):,} chars). "
+            f"Tool: {fname}{path_part}— call again if needed.]"
+        )
+
+
 def agent_loop(
     messages: list, ctx: AppContext, text_callback=None
 ) -> tuple[str, int, int]:
@@ -207,6 +235,7 @@ def agent_loop(
 
         if not tool_calls:
             messages.append({"role": "assistant", "content": content})
+            _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
             return content, total_prompt, total_completion
 
         iteration += 1
@@ -216,6 +245,7 @@ def agent_loop(
             )
             content = content or f"[Stopped after {max_iterations} tool calls]"
             messages.append({"role": "assistant", "content": content})
+            _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
             return content, total_prompt, total_completion
 
         messages.append({

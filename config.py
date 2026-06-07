@@ -24,6 +24,14 @@ DEFAULTS: dict = {
     "max_tool_iterations": 20,
     "read_file_limit": 100_000,
     "auto_yes": False,
+    "tool_result_evict_threshold": 1500,
+    "build_filter_enabled": True,
+    "build_filter_keywords": ["make", "qmake", "cmake", "ninja", "g++", "gcc", "clang++", "clang", "msbuild", "cargo"],
+    "build_filter_patterns": ["error:", "warning:", "undefined reference", "vtable for", "note:", "ld:", "cannot find -l", "DSO missing"],
+    "build_filter_context_lines": 2,
+    "build_output_max_lines": 120,
+    "file_cache_max_files": 50,
+    "file_cache_max_bytes": 10_000_000,
 }
 
 CONFIG_PATHS = [
@@ -85,6 +93,7 @@ class AppContext:
         self.client = OpenAI(base_url=self.base_url, api_key=self.cfg.get("api_key", "lm-studio"))
         self.console = Console()
         self._live_status = None  # set by main loop when spinner is active
+        self.file_registry: dict = {}  # {abs_path: {mtime, size, content}} — LRU cache
 
     def confirm(self, question: str) -> bool:
         """Stop the spinner, ask a yes/no question, restart the spinner."""
