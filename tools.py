@@ -1,3 +1,4 @@
+import glob
 import os
 import re
 import subprocess
@@ -135,6 +136,33 @@ TOOL_DEFINITIONS = [
                     "context_lines": {
                         "type": "integer",
                         "description": "Number of context lines before and after each match (default: 0)",
+                    },
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "glob_files",
+            "description": (
+                "Find files by name pattern, not by content (like glob/find). "
+                "Supports wildcards ('*.py') and recursive patterns ('**/*.test.js'). "
+                "Returns matching paths, most recently modified first. "
+                "Use this to locate files when you know (part of) the name but not the location, "
+                "as an alternative to search_files (which matches file contents)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern, e.g. '*.py', '**/*.tsx', 'src/**/test_*.py'",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Base directory to search from (default: current directory)",
                     },
                 },
                 "required": ["pattern"],
@@ -449,6 +477,22 @@ def search_files(
         return f"ERROR: {e}"
 
 
+def glob_files(pattern: str, path: str = ".", ctx: AppContext = None) -> str:
+    try:
+        base = os.path.expanduser(path)
+        full_pattern = os.path.join(base, pattern)
+        matches = [m for m in glob.glob(full_pattern, recursive=True) if os.path.isfile(m)]
+        if not matches:
+            return "No files found."
+        matches.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        if len(matches) > 200:
+            remainder = len(matches) - 200
+            return "\n".join(matches[:200]) + f"\n[…{remainder} more files truncated]"
+        return "\n".join(matches)
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
 def list_known_files(ctx: AppContext) -> str:
     if not ctx.file_registry:
         return "No files have been read in this session."
@@ -474,5 +518,6 @@ def make_dispatch(ctx: AppContext) -> dict:
             a.get("context_lines", 0),
             ctx,
         ),
+        "glob_files": lambda a: glob_files(a["pattern"], a.get("path", "."), ctx),
         "list_known_files": lambda a: list_known_files(ctx),
     }
