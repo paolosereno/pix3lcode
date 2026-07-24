@@ -1,5 +1,5 @@
 import os
-from config import AppContext
+from .config import AppContext
 
 
 def load_project_context() -> str | None:

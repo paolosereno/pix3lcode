@@ -190,7 +190,7 @@ def main():
         f"  Read limit: {cfg['read_file_limit'] // 1024}KB per file\n"
         f"  Auto-yes:   {'yes (no confirmations)' if cfg.get('auto_yes') else 'no (ask before writing)'}\n"
         f"  Sessions:   [dim]{cfg['sessions_dir']}[/dim]\n\n"
-        f"Start the tool with: [bold]./pix3lcode.sh[/bold]",
+        f"Start the tool with: [bold]pix3lcode[/bold]",
         border_style="green",
     ))
 

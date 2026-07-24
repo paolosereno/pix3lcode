@@ -3,6 +3,7 @@ import json
 import sys
 import yaml
 from dataclasses import dataclass, field
+from importlib import resources
 from openai import OpenAI
 from rich.console import Console
 from prompt_toolkit import prompt as pt_prompt
@@ -43,7 +44,13 @@ CONFIG_PATHS = [
     os.path.expanduser("~/.pix3lcode_config.json"),
 ]
 
-PROFILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+USER_PROFILES_DIR = os.path.expanduser("~/.pix3lcode_profiles")
+
+
+def _profiles_dir():
+    """Package-data 'profiles/' dir, resolved whether pix3lcode is installed normally,
+    in editable mode, or run from a source checkout."""
+    return resources.files(__package__) / "profiles"
 
 
 def _load_file(path: str) -> dict:
@@ -77,14 +84,23 @@ def load_config(extra_path: str | None = None, profile: str | None = None) -> di
             print(f"Config file not found: {extra_path}")
 
     if profile:
-        profile_path = os.path.join(PROFILES_DIR, f"{profile}.json")
-        if os.path.exists(profile_path):
+        # User-defined profiles (~/.pix3lcode_profiles/) take precedence over the
+        # built-in ones shipped with the package, and are the only way to add a
+        # custom profile once installed (package data isn't user-writable).
+        user_profile_path = os.path.join(USER_PROFILES_DIR, f"{profile}.json")
+        builtin_profile_res = _profiles_dir() / f"{profile}.json"
+        if os.path.exists(user_profile_path):
             try:
-                cfg.update(_load_file(profile_path))
+                cfg.update(_load_file(user_profile_path))
+            except Exception as e:
+                print(f"Error in profile '{profile}': {e}")
+        elif builtin_profile_res.is_file():
+            try:
+                cfg.update(json.loads(builtin_profile_res.read_text(encoding="utf-8")))
             except Exception as e:
                 print(f"Error in profile '{profile}': {e}")
         else:
-            print(f"Profile '{profile}' not found in {PROFILES_DIR}/")
+            print(f"Profile '{profile}' not found in {USER_PROFILES_DIR}/ or {_profiles_dir()}/")
             sys.exit(1)
 
     return cfg

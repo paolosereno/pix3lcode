@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pix3lcode"
+version = "0.1.0"
+description = "Terminal coding agent for local/self-hosted LLM backends (LM Studio, OpenRouter, ...) with tool calling"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+    "httpx>=0.24.0",
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+    "pypdf>=5.0.0",
+    "tavily-python>=0.3.0",
+    "PyYAML>=6.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[project.scripts]
+pix3lcode = "pix3lcode.main:main"
+pix3lcode-setup = "pix3lcode.setup:main"
+
+[tool.setuptools]
+packages = ["pix3lcode"]
+
+[tool.setuptools.package-data]
+# Explicit allowlist, not a "profiles/*.json" glob: profiles/openrouter.json is a
+# gitignored personal file (holds a real API key) and must never end up in a
+# built/distributed wheel. Editable installs still see it (read straight off disk).
+pix3lcode = ["profiles/coding.json", "profiles/linux.json", "profiles/qt.json"]

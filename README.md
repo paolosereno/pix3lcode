@@ -36,30 +36,51 @@ A terminal chat application powered by [LM Studio](https://lmstudio.ai/), with t
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11+ and [pipx](https://pipx.pypa.io/)
 - [LM Studio](https://lmstudio.ai/) running with a model that supports tool calling (e.g. Qwen3, Devstral)
 - For vision: a multimodal model loaded in LM Studio (e.g. Qwen2-VL, LLaVA)
-- For PDF reading: `pypdf` (installed automatically via `requirements.txt`)
+- For PDF reading: `pypdf` (installed automatically as a dependency)
 - For web search: a [Tavily](https://app.tavily.com) API key (free tier: 2000 queries/month)
 
 ## Installation
+
+Requires [pipx](https://pipx.pypa.io/) (installs Python CLI tools into isolated venvs and puts them on your `PATH`):
+
+```bash
+# Debian/Ubuntu
+sudo apt install pipx
+pipx ensurepath
+
+# or via pip
+python3 -m pip install --user pipx
+pipx ensurepath
+```
+
+Then install pix3lcode:
 
 ```bash
 # Clone the repository
 git clone <repo-url>
 cd pix3lcode
 
-# Create virtual environment and install dependencies
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+# Editable install (recommended if you plan to modify the code — changes
+# take effect immediately, no reinstall needed)
+pipx install -e .
+
+# Or a regular install from a built wheel
+python3 -m pip install --user build
+python3 -m build --wheel
+pipx install dist/pix3lcode-*.whl
 ```
+
+`pix3lcode` and `pix3lcode-setup` are now available from any directory. Upgrade with `pipx upgrade pix3lcode`, remove with `pipx uninstall pix3lcode`.
 
 ## Setup
 
 Run the interactive setup wizard to generate your configuration file. It connects to LM Studio, fetches the list of loaded models, and guides you through all parameters:
 
 ```bash
-./setup.sh
+pix3lcode-setup
 ```
 
 The wizard will ask:
@@ -71,55 +92,48 @@ The wizard will ask:
 - Sessions directory
 - System prompt (optional)
 
-Configuration is saved to `pix3lcode_config.json` in the current directory (project-specific) or to `~/.pix3lcode_config.json` (global). Re-run `./setup.sh` any time you switch models.
+Configuration is saved to `pix3lcode_config.json` in the current directory (project-specific) or to `~/.pix3lcode_config.json` (global). Re-run `pix3lcode-setup` any time you switch models.
 
 ## Usage
 
 ```bash
 # Start a new session
-./pix3lcode.sh
+pix3lcode
 
 # Use a specific model
-./pix3lcode.sh --model mistralai/devstral-small-2-2512
-./pix3lcode.sh -m qwen/qwen3-5b
+pix3lcode --model mistralai/devstral-small-2-2512
+pix3lcode -m qwen/qwen3-5b
 
 # Resume the last session (shows a list to choose from)
-./pix3lcode.sh --resume
-./pix3lcode.sh -r
+pix3lcode --resume
+pix3lcode -r
 
 # Resume a specific session by ID
-./pix3lcode.sh --resume 20240418_143022
+pix3lcode --resume 20240418_143022
 
 # Use an alternative config file
-./pix3lcode.sh --config ~/configs/coding.json
+pix3lcode --config ~/configs/coding.json
 
 # Use a named profile (from profiles/ directory)
-./pix3lcode.sh --profile coding
-./pix3lcode.sh -p linux
+pix3lcode --profile coding
+pix3lcode -p linux
 
 # Non-interactive mode: single prompt, print response and exit
-./pix3lcode.sh "scrivi un hello world in rust"
-./pix3lcode.sh -p coding "trova bug in questo codice" < main.py
+pix3lcode "scrivi un hello world in rust"
+pix3lcode -p coding "trova bug in questo codice" < main.py
 
 # Pipe from stdin
-cat error.log | ./pix3lcode.sh "cosa significa questo errore?"
-git diff | ./pix3lcode.sh "scrivi un messaggio di commit"
+cat error.log | pix3lcode "cosa significa questo errore?"
+git diff | pix3lcode "scrivi un messaggio di commit"
 
 # Auto-confirm dangerous shell commands (for use in scripts)
-./pix3lcode.sh --yes "pulisci la directory build"
+pix3lcode --yes "pulisci la directory build"
 
 # Pure chat mode without tools (saves tokens in system prompt)
-./pix3lcode.sh --no-tools
-```
+pix3lcode --no-tools
 
-### Optional: global alias
-
-```bash
-echo "alias pix3lcode='/path/to/pix3lcode/pix3lcode.sh'" >> ~/.bashrc
-source ~/.bashrc
-# Then just type:
-pix3lcode
-pix3lcode --resume
+# Print the installed version
+pix3lcode --version
 ```
 
 ## Commands
@@ -185,11 +199,11 @@ If a `CONTEXT.md` file exists in the current directory, it is automatically appe
 Run `/init` to generate it automatically — the model explores the project structure and key files, then writes `CONTEXT.md` for you. Best used with a large-context model (9B, 80k tokens):
 
 ```bash
-./pix3lcode.sh          # start with large-context model
+pix3lcode          # start with large-context model
 /init             # generates CONTEXT.md by reading the project
 /exit             # save and exit
 
-./pix3lcode.sh -p coding  # next sessions start with CONTEXT.md already loaded
+pix3lcode -p coding  # next sessions start with CONTEXT.md already loaded
 ```
 
 If `CONTEXT.md` already exists, `/init` asks before overwriting.
@@ -225,46 +239,50 @@ Pass a prompt directly as argument — the tool responds once and exits. Useful 
 
 ```bash
 # Single prompt
-./pix3lcode.sh "scrivi un hello world in rust"
+pix3lcode "scrivi un hello world in rust"
 
 # Pipe file content
-cat src/main.py | ./pix3lcode.sh "trova potenziali bug"
+cat src/main.py | pix3lcode "trova potenziali bug"
 
 # Git integration
-git diff | ./pix3lcode.sh "scrivi un messaggio di commit"
+git diff | pix3lcode "scrivi un messaggio di commit"
 
 # With profile
-./pix3lcode.sh -p coding "refactora questa funzione" < utils.py
+pix3lcode -p coding "refactora questa funzione" < utils.py
 
 # Skip confirmation for dangerous commands (use with care)
-./pix3lcode.sh --yes "rimuovi i file temporanei in build/"
+pix3lcode --yes "rimuovi i file temporanei in build/"
 ```
 
 ## Profiles
 
-Profiles are JSON files stored in the `profiles/` directory. Each profile overrides only the parameters it defines — the rest fall back to `pix3lcode_config.json` or built-in defaults.
+Profiles are named JSON files that override only the parameters they define — the rest fall back to `pix3lcode_config.json` or built-in defaults. Built-in profiles ship with the package; your own custom profiles go in `~/.pix3lcode_profiles/` (checked first, so a user profile can also override a built-in one of the same name).
 
 ```bash
-./pix3lcode.sh --profile coding    # loads profiles/coding.json
-./pix3lcode.sh -p linux            # loads profiles/linux.json
+pix3lcode --profile coding    # loads ~/.pix3lcode_profiles/coding.json if present, else the built-in one
+pix3lcode -p linux
 ```
 
-Two example profiles are included:
+A few example profiles are included:
 
 | Profile | Model | Context | Use case |
 |---|---|---|---|
 | `coding` | large model | 18k | complex code tasks requiring better reasoning |
 | `linux` | fast model | 80k | shell, sysadmin, long sessions |
+| `qt` | large model | — | Qt/C++ development |
 
-Create your own by adding a JSON file to `profiles/`:
+Create your own:
 
-```json
-// profiles/myprofile.json
+```bash
+mkdir -p ~/.pix3lcode_profiles
+cat > ~/.pix3lcode_profiles/myprofile.json << 'EOF'
 {
   "model": "my-model-name",
   "context_limit": 32000,
   "system_prompt": "You are a..."
 }
+EOF
+pix3lcode -p myprofile
 ```
 
 The active profile name is shown in the startup panel.
@@ -284,10 +302,10 @@ Sessions are saved automatically to `~/.pix3lcode_sessions/` after every exchang
 
 ```bash
 # Resume interactively
-./pix3lcode.sh --resume
+pix3lcode --resume
 
 # Resume a specific session
-./pix3lcode.sh --resume 20240418_143022
+pix3lcode --resume 20240418_143022
 ```
 
 You can also switch sessions mid-conversation with `/sessions`.

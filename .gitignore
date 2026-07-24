@@ -2,8 +2,11 @@
 __pycache__/
 *.pyc
 *.pyo
+dist/
+build/
+*.egg-info/
 ~/.llm_cli_sessions/
 CONTEXT.md
 improvements.md
 pix3lcode_config.json
-profiles/openrouter.json
+pix3lcode/profiles/openrouter.json

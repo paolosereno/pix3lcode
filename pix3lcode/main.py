@@ -11,10 +11,11 @@ from rich.panel import Panel
 from prompt_toolkit import prompt
 from prompt_toolkit.history import FileHistory
 
-from config import load_config, AppContext
-from context import load_project_context, build_system_prompt
-from session import save_session, load_session, pick_session, latest_session_id, rename_session, export_session
-from agent import agent_loop, compact_messages, check_context
+from . import __version__
+from .config import load_config, AppContext
+from .context import load_project_context, build_system_prompt
+from .session import save_session, load_session, pick_session, latest_session_id, rename_session, export_session
+from .agent import agent_loop, compact_messages, check_context
 
 
 def _make_streaming_callback(ctx):
@@ -96,8 +97,13 @@ parser.add_argument("--task", metavar="FILE", help="Read task from file and run 
 parser.add_argument("--report", metavar="FILE", help="Write JSON outcome report to FILE after execution")
 parser.add_argument("--non-interactive", action="store_true",
                     help="Suppress all UI output and auto-confirm prompts (for subprocess use)")
+parser.add_argument("--version", action="store_true", help="Show version and exit")
 parser.add_argument("prompt_text", nargs="?", metavar="PROMPT", help="Non-interactive mode: run prompt and exit")
 args = parser.parse_args()
+
+if args.version:
+    print(f"pix3lcode {__version__}")
+    sys.exit(0)
 
 # ── Config & context ──────────────────────────────────────────────────────────
 
@@ -322,8 +328,8 @@ def main():
                 "  [cyan]git_log[/cyan]        show commit history\n"
                 "  [cyan]git_commit[/cyan]     run git add + commit (asks confirmation)\n\n"
                 "[bold cyan]Resume from command line:[/bold cyan]\n"
-                "  [dim]./pix3lcode.sh --resume[/dim]              resume from list\n"
-                "  [dim]./pix3lcode.sh --resume 20240418_1230[/dim]  resume a specific session\n\n"
+                "  [dim]pix3lcode --resume[/dim]              resume from list\n"
+                "  [dim]pix3lcode --resume 20240418_1230[/dim]  resume a specific session\n\n"
                 f"[bold]Model:[/bold] [green]{ctx.model}[/green]  [dim]{ctx.base_url}[/dim]",
                 title="[bold]Available commands[/bold]",
                 border_style="cyan",

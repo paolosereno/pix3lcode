@@ -2,7 +2,7 @@ import glob
 import os
 import re
 import subprocess
-from config import AppContext
+from .config import AppContext
 
 DANGEROUS_PATTERNS = [
     r"\brm\b", r"\bdd\b", r"\bmkfs\b", r"\bshred\b", r"\btruncate\b",
@@ -371,6 +371,17 @@ def _filter_build_output(output: str, ctx: AppContext) -> str:
     return f"[Build output: {len(result)}/{total} significant lines]\n" + "\n".join(result)
 
 
+def _dev_venv_bin() -> str | None:
+    """
+    In a source checkout, expose the local .venv/bin on PATH for shell commands
+    so tools installed there (pytest, etc.) are found. Not applicable — and the
+    directory won't exist — once installed via pipx, so this is a no-op then.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    venv_bin = os.path.join(project_root, ".venv", "bin")
+    return venv_bin if os.path.isdir(venv_bin) else None
+
+
 def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
     if _is_dangerous(command):
         if ctx.auto_yes:
@@ -383,10 +394,11 @@ def execute_shell(command: str, workdir: str | None, ctx: AppContext) -> str:
             if not ctx.confirm("  Execute? [y/N]: "):
                 return "Execution cancelled by user."
 
-    venv_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin")
     env = os.environ.copy()
-    env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
-    env["VIRTUAL_ENV"] = os.path.dirname(venv_bin)
+    venv_bin = _dev_venv_bin()
+    if venv_bin:
+        env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
+        env["VIRTUAL_ENV"] = os.path.dirname(venv_bin)
 
     try:
         result = subprocess.run(

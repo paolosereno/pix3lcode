@@ -4,7 +4,7 @@ import glob as glob_module
 from datetime import datetime
 from rich.table import Table
 from prompt_toolkit import prompt
-from config import AppContext
+from .config import AppContext
 
 
 def _serialize_messages(messages: list) -> list:

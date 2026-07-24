@@ -2,7 +2,7 @@ import os
 import re
 import httpx
 from bs4 import BeautifulSoup
-from config import AppContext
+from .config import AppContext
 
 TOOL_DEFINITIONS = [
     {

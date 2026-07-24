@@ -4,10 +4,10 @@ import sys
 from types import SimpleNamespace
 from rich.markdown import Markdown
 from rich.panel import Panel
-from config import AppContext
-import tools as tools_module
-import git_tools
-import web_tools
+from .config import AppContext
+from . import tools as tools_module
+from . import git_tools
+from . import web_tools
 
 
 def _build_tools_list(ctx: AppContext) -> list:

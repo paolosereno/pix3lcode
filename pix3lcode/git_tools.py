@@ -1,6 +1,6 @@
 import os
 import subprocess
-from config import AppContext
+from .config import AppContext
 
 TOOL_DEFINITIONS = [
     {
