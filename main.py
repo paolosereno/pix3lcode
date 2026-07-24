@@ -2,6 +2,7 @@
 import os
 import sys
 import re
+import signal
 import base64
 import argparse
 from datetime import datetime
@@ -91,6 +92,10 @@ parser.add_argument("--config", "-c", metavar="FILE", help="Path to an alternati
 parser.add_argument("--profile", "-p", metavar="NAME", help="Profile to use (file in profiles/<name>.json)")
 parser.add_argument("--yes", "-y", action="store_true", help="Auto-confirm dangerous shell commands")
 parser.add_argument("--no-tools", action="store_true", help="Disable all tools (pure chat, saves tokens)")
+parser.add_argument("--task", metavar="FILE", help="Read task from file and run non-interactively")
+parser.add_argument("--report", metavar="FILE", help="Write JSON outcome report to FILE after execution")
+parser.add_argument("--non-interactive", action="store_true",
+                    help="Suppress all UI output and auto-confirm prompts (for subprocess use)")
 parser.add_argument("prompt_text", nargs="?", metavar="PROMPT", help="Non-interactive mode: run prompt and exit")
 args = parser.parse_args()
 
@@ -103,15 +108,40 @@ ctx = AppContext(
     cfg=cfg,
     model=model,
     base_url=cfg["base_url"],
-    auto_yes=args.yes,
+    auto_yes=args.yes or args.non_interactive,
     profile=args.profile,
     no_tools=args.no_tools,
 )
 
+if args.non_interactive:
+    import io
+    ctx.console = __import__("rich.console", fromlist=["Console"]).Console(file=open(os.devnull, "w"))
+
 # ── Non-interactive mode ──────────────────────────────────────────────────────
 
+def _write_report(report_path: str, outcome: str, iterations: int,
+                  modified_files: list, error_message: str | None) -> None:
+    import json as _json
+    data = {
+        "outcome": outcome,
+        "iterations": iterations,
+        "modified_files": modified_files,
+        "error_message": error_message,
+    }
+    try:
+        with open(report_path, "w", encoding="utf-8") as f:
+            _json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Warning: cannot write report to '{report_path}': {e}", file=sys.stderr)
+
+
 def run_once(user_input: str) -> None:
-    """Run a single prompt and print the response to stdout."""
+    """Run a single prompt, print the response to stdout, and exit with a structured code.
+
+    Exit codes: 0 = success, 1 = task failure (stagnation/limit), 2 = internal error.
+    Writes a JSON report to --report path if specified.
+    Honours max_execution_seconds from config (0 = disabled).
+    """
     streamed = []
 
     def callback(chunk):
@@ -124,21 +154,53 @@ def run_once(user_input: str) -> None:
         {"role": "system", "content": build_system_prompt(ctx)},
         {"role": "user", "content": user_input},
     ]
+    report_path = getattr(args, "report", None)
+    timeout_secs = int(ctx.cfg.get("max_execution_seconds", 0))
+
+    if timeout_secs > 0:
+        def _on_timeout(signum, frame):
+            raise TimeoutError(f"Execution timeout after {timeout_secs}s")
+        signal.signal(signal.SIGALRM, _on_timeout)
+        signal.alarm(timeout_secs)
+
     try:
-        reply, _, _ = agent_loop(messages, ctx, text_callback=callback)
+        reply, _, _, meta = agent_loop(messages, ctx, text_callback=callback)
         if streamed:
             print()
         else:
             print(reply)
+        if report_path:
+            _write_report(report_path, meta["outcome"], meta["iterations"],
+                          meta["modified_files"], None)
+        sys.exit(0 if meta["outcome"] == "success" else 1)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        if report_path:
+            _write_report(report_path, "error", 0, [], str(e))
+        sys.exit(2)
+    finally:
+        if timeout_secs > 0:
+            signal.alarm(0)  # cancel pending alarm
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # --task: read prompt from file and run non-interactively
+    if args.task:
+        try:
+            with open(args.task, "r", encoding="utf-8") as f:
+                task_content = f.read().strip()
+        except Exception as e:
+            print(f"Cannot read task file '{args.task}': {e}", file=sys.stderr)
+            sys.exit(2)
+        if not task_content:
+            print(f"Task file '{args.task}' is empty.", file=sys.stderr)
+            sys.exit(2)
+        run_once(task_content)
+        return
 
     # non-interactive mode
     if args.prompt_text:
@@ -378,7 +440,7 @@ def main():
             with ctx.console.status("[bold blue]Generating Doxygen comments…[/bold blue]", spinner="dots") as s:
                 ctx._live_status = s
                 try:
-                    reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=doxy_callback)
+                    reply, prompt_tok, completion_tok, _ = agent_loop(messages, ctx, text_callback=doxy_callback)
                 except KeyboardInterrupt:
                     ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                     messages.pop()
@@ -428,7 +490,7 @@ def main():
             with ctx.console.status("[bold blue]Analyzing project…[/bold blue]", spinner="dots") as s:
                 ctx._live_status = s
                 try:
-                    reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=init_callback)
+                    reply, prompt_tok, completion_tok, _ = agent_loop(messages, ctx, text_callback=init_callback)
                 except KeyboardInterrupt:
                     ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                     messages.pop()
@@ -459,7 +521,7 @@ def main():
         with ctx.console.status("[bold blue]Thinking…[/bold blue]", spinner="dots") as s:
             ctx._live_status = s
             try:
-                reply, prompt_tok, completion_tok = agent_loop(messages, ctx, text_callback=stream_callback)
+                reply, prompt_tok, completion_tok, _ = agent_loop(messages, ctx, text_callback=stream_callback)
             except KeyboardInterrupt:
                 ctx.console.print("\n[yellow]Cancelled.[/yellow]")
                 messages.pop()

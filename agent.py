@@ -225,18 +225,27 @@ def _stagnation_key(name: str, args: dict) -> str:
 
 def agent_loop(
     messages: list, ctx: AppContext, text_callback=None
-) -> tuple[str, int, int]:
-    """Returns (reply, total_prompt_tokens, total_completion_tokens)."""
+) -> tuple[str, int, int, dict]:
+    """
+    Returns (reply, total_prompt_tokens, total_completion_tokens, meta).
+    meta = {"outcome": "success"|"failure", "iterations": int, "modified_files": list[str]}
+    outcome "failure" covers stagnation, max-iterations, and context-limit stops.
+    Caller is responsible for mapping exceptions to outcome "error".
+    """
     tools_list = _build_tools_list(ctx)
     dispatch = _build_dispatch(ctx)
     total_prompt = 0
     total_completion = 0
     max_iterations = int(ctx.cfg.get("max_tool_iterations", 20))
     iteration = 0
-    last_prompt_tokens = 0  # context size of the most recent API call
-    consecutive_sig = None  # (tool_name, args_key) of the last tool call
-    consecutive_out = None  # first 300 chars of the last tool call's output
+    last_prompt_tokens = 0
+    consecutive_sig = None
+    consecutive_out = None
     consecutive_count = 0
+    modified_files: list[str] = []
+
+    def _meta(outcome: str) -> dict:
+        return {"outcome": outcome, "iterations": iteration, "modified_files": modified_files}
 
     while True:
         # ── Context brake ──────────────────────────────────────────────────────
@@ -252,7 +261,7 @@ def agent_loop(
             stop_msg = f"[Task stopped: context at {pct}% of limit. Run /compact and resume.]"
             messages.append({"role": "assistant", "content": stop_msg})
             _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
-            return stop_msg, total_prompt, total_completion
+            return stop_msg, total_prompt, total_completion, _meta("failure")
 
         content, tool_calls, prompt_tokens, completion_tokens = _stream_api_call(
             messages, tools_list, ctx, text_callback=text_callback
@@ -265,7 +274,7 @@ def agent_loop(
         if not tool_calls:
             messages.append({"role": "assistant", "content": content})
             _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
-            return content, total_prompt, total_completion
+            return content, total_prompt, total_completion, _meta("success")
 
         iteration += 1
         if iteration >= max_iterations:
@@ -275,7 +284,7 @@ def agent_loop(
             content = content or f"[Stopped after {max_iterations} tool calls]"
             messages.append({"role": "assistant", "content": content})
             _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
-            return content, total_prompt, total_completion
+            return content, total_prompt, total_completion, _meta("failure")
 
         messages.append({
             "role": "assistant",
@@ -300,6 +309,12 @@ def agent_loop(
                 tool_args = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
                 tool_args = {}
+
+            # track files written or patched
+            if name in ("write_file", "patch_file"):
+                path = tool_args.get("path", "")
+                if path and path not in modified_files:
+                    modified_files.append(path)
 
             ctx.console.print(f"\n  [bold yellow]⚙ Tool:[/bold yellow] [cyan]{name}[/cyan]  {tool_args}")
             result = run_tool(name, tool_args, dispatch)
@@ -330,7 +345,7 @@ def agent_loop(
                 )
                 messages.append({"role": "assistant", "content": stop_msg})
                 _evict_large_tool_results(messages, int(ctx.cfg.get("tool_result_evict_threshold", 1500)))
-                return stop_msg, total_prompt, total_completion
+                return stop_msg, total_prompt, total_completion, _meta("failure")
 
 
 def compact_messages(messages: list, ctx: AppContext) -> list:

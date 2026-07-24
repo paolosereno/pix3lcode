@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import yaml
 from dataclasses import dataclass, field
 from openai import OpenAI
 from rich.console import Console
@@ -34,6 +35,7 @@ DEFAULTS: dict = {
     "file_cache_max_bytes": 10_000_000,
     "agent_context_limit_threshold": 0.95,
     "stagnation_threshold": 3,
+    "max_execution_seconds": 0,  # 0 = disabled
 }
 
 CONFIG_PATHS = [
@@ -44,21 +46,31 @@ CONFIG_PATHS = [
 PROFILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
 
 
+def _load_file(path: str) -> dict:
+    """Load a JSON or YAML config file based on file extension."""
+    ext = os.path.splitext(path)[1].lower()
+    with open(path, "r", encoding="utf-8") as f:
+        if ext in (".yaml", ".yml"):
+            return yaml.safe_load(f) or {}
+        return json.load(f)
+
+
 def load_config(extra_path: str | None = None, profile: str | None = None) -> dict:
     cfg = dict(DEFAULTS)
     for path in reversed(CONFIG_PATHS):  # home first, then local (overrides)
         if os.path.exists(path):
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    cfg.update(json.load(f))
+                cfg.update(_load_file(path))
             except Exception as e:
                 print(f"Warning: cannot read {path}: {e}")
 
     if extra_path:
         if os.path.exists(extra_path):
             try:
-                with open(extra_path, "r", encoding="utf-8") as f:
-                    cfg.update(json.load(f))
+                cfg.update(_load_file(extra_path))
+                # profile key embedded in config file (e.g. from orchestrator YAML)
+                if not profile and cfg.get("profile"):
+                    profile = cfg.pop("profile")
             except Exception as e:
                 print(f"Error in config file: {e}")
         else:
@@ -68,8 +80,7 @@ def load_config(extra_path: str | None = None, profile: str | None = None) -> di
         profile_path = os.path.join(PROFILES_DIR, f"{profile}.json")
         if os.path.exists(profile_path):
             try:
-                with open(profile_path, "r", encoding="utf-8") as f:
-                    cfg.update(json.load(f))
+                cfg.update(_load_file(profile_path))
             except Exception as e:
                 print(f"Error in profile '{profile}': {e}")
         else:
