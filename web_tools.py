@@ -1,6 +1,7 @@
 import os
 import re
 import httpx
+from bs4 import BeautifulSoup
 from config import AppContext
 
 TOOL_DEFINITIONS = [
@@ -92,15 +93,18 @@ def web_search(query: str, max_results: int = 5, ctx: AppContext = None) -> str:
         return f"ERROR: {e}"
 
 
+_BOILERPLATE_TAGS = ["script", "style", "nav", "header", "footer", "aside", "form"]
+
+
 def _strip_html(html: str) -> str:
-    html = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    html = re.sub(r"<(br|p|div|h[1-6]|li|tr|blockquote)[^>]*>", "\n", html, flags=re.IGNORECASE)
-    html = re.sub(r"<[^>]+>", "", html)
-    for entity, char in [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-                          ("&quot;", '"'), ("&#39;", "'"), ("&nbsp;", " ")]:
-        html = html.replace(entity, char)
-    html = re.sub(r"\n{3,}", "\n\n", html)
-    return html.strip()
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(_BOILERPLATE_TAGS):
+        tag.decompose()
+    content = soup.find("main") or soup.find("article") or soup
+    text = content.get_text(separator="\n")
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def fetch_url(url: str, ctx: AppContext = None) -> str:
