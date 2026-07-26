@@ -14,8 +14,9 @@ DEFAULTS: dict = {
     "model": "qwen/qwen3-5b",
     "system_prompt": (
         "You are an AI assistant expert in programming and Linux systems. "
-        "You have access to tools to read/write files, execute shell commands, and search code. "
-        "Use these tools when needed. Before executing destructive commands, warn the user."
+        "You have access to tools to read/write files, execute shell commands, search code, and "
+        "search the web (web_search, fetch_url) for documentation, API references and other "
+        "up-to-date information. Use these tools when needed. Before executing destructive commands, warn the user."
     ),
     "sessions_dir": "~/.pix3lcode_sessions",
     "shell_timeout": 60,
@@ -37,6 +38,7 @@ DEFAULTS: dict = {
     "agent_context_limit_threshold": 0.95,
     "stagnation_threshold": 3,
     "max_execution_seconds": 0,  # 0 = disabled
+    "searxng_url": None,  # e.g. "http://192.168.1.103:8888" — enables web_search
 }
 
 CONFIG_PATHS = [

@@ -3,6 +3,5 @@ httpx>=0.24.0
 rich>=13.0.0
 prompt_toolkit>=3.0.0
 pypdf>=5.0.0
-tavily-python>=0.3.0
 PyYAML>=6.0
 beautifulsoup4>=4.12.0

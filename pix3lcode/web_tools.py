@@ -55,29 +55,34 @@ TOOL_DEFINITIONS = [
 ]
 
 
-def _get_tavily_key(ctx: AppContext) -> str | None:
-    """Ottieni la chiave API Tavily dalla configurazione o dalle environment variable.
+def _get_searxng_url(ctx: AppContext) -> str | None:
+    """Ottieni l'URL base dell'istanza SearXNG dalla configurazione o dalle environment variable.
 
     :param ctx: Contesto dell'applicazione con accesso alla configurazione
-    :return: La chiave API Tavily o None se non configurata
+    :return: L'URL base di SearXNG (senza trailing slash) o None se non configurato
     :rtype: Optional[str]
     """
-    return ctx.cfg.get("tavily_api_key") or os.environ.get("TAVILY_API_KEY")
+    url = ctx.cfg.get("searxng_url") or os.environ.get("SEARXNG_URL")
+    return url.rstrip("/") if url else None
 
 
 def web_search(query: str, max_results: int = 5, ctx: AppContext = None) -> str:
-    api_key = _get_tavily_key(ctx)
-    if not api_key:
+    base_url = _get_searxng_url(ctx)
+    if not base_url:
         return (
-            "ERROR: Tavily API key not configured. "
-            "Add 'tavily_api_key' to pix3lcode_config.json or set the TAVILY_API_KEY environment variable. "
-            "Get a free key at https://app.tavily.com"
+            "ERROR: SearXNG URL not configured. "
+            "Add 'searxng_url' to pix3lcode_config.json (e.g. 'http://192.168.1.103:8888') "
+            "or set the SEARXNG_URL environment variable."
         )
     try:
-        from tavily import TavilyClient
-        client = TavilyClient(api_key=api_key)
-        response = client.search(query=query, max_results=max_results)
-        results = response.get("results", [])
+        with httpx.Client(timeout=30) as client:
+            response = client.get(
+                f"{base_url}/search",
+                params={"q": query, "format": "json"},
+            )
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])[:max_results]
         if not results:
             return "No results found."
         lines = []
@@ -87,8 +92,8 @@ def web_search(query: str, max_results: int = 5, ctx: AppContext = None) -> str:
             content = r.get("content", "").strip()
             lines.append(f"[{i}] {title}\n    URL: {url}\n    {content}")
         return "\n\n".join(lines)
-    except ImportError:
-        return "ERROR: 'tavily-python' library not installed. Run: pip install tavily-python"
+    except httpx.HTTPStatusError as e:
+        return f"ERROR: SearXNG returned HTTP {e.response.status_code}. Make sure 'json' is enabled in search.formats in your SearXNG settings.yml."
     except Exception as e:
         return f"ERROR: {e}"
 

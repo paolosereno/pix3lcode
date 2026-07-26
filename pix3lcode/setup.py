@@ -28,6 +28,7 @@ DEFAULTS = {
     "context_limit": 80000,
     "context_warn_threshold": 0.70,
     "max_tool_iterations": 20,
+    "searxng_url": "",
     "system_prompt": (
         "You are an AI assistant expert in programming and Linux systems. "
         "You have access to tools to read/write files, execute shell commands, and search code. "
@@ -83,6 +84,17 @@ def pick_model(models: list[str]) -> str:
         console.print("[red]Invalid number, enter the name manually.[/red]")
         return ""
     return choice
+
+
+def check_searxng(base_url: str) -> tuple[bool, str]:
+    url = base_url.rstrip("/") + "/search"
+    try:
+        r = httpx.get(url, params={"q": "test", "format": "json"}, timeout=5)
+        r.raise_for_status()
+        r.json()
+        return True, "reachable"
+    except Exception as e:
+        return False, str(e)
 
 
 def load_existing(path: str) -> dict:
@@ -159,6 +171,21 @@ def main():
     console.print("\n[bold]Sessions[/bold]")
     cfg["sessions_dir"] = ask("Sessions directory", cfg["sessions_dir"])
 
+    # web search (SearXNG)
+    console.print("\n[bold]Web search (SearXNG)[/bold]")
+    console.print("  [dim]Base URL of your SearXNG instance, e.g. http://192.168.1.103:8888. "
+                  "Leave empty to disable web_search.[/dim]")
+    cfg["searxng_url"] = ask("SearXNG URL", cfg.get("searxng_url", ""))
+    if cfg["searxng_url"]:
+        console.print(f"  [dim]Checking {cfg['searxng_url']}…[/dim]")
+        ok, detail = check_searxng(cfg["searxng_url"])
+        if ok:
+            console.print("  [green]✓ SearXNG reachable[/green]")
+        else:
+            console.print(f"  [yellow]⚠ Cannot reach SearXNG ({detail}). "
+                          f"The address will be saved anyway — update it later by re-running "
+                          f"pix3lcode-setup if the IP changes.[/yellow]")
+
     # system prompt
     console.print("\n[bold]System prompt[/bold]")
     console.print(f"  [dim]Current: {cfg['system_prompt'][:80]}…[/dim]")
@@ -189,7 +216,8 @@ def main():
         f"  Max tools:  {cfg['max_tool_iterations']} iterations per response\n"
         f"  Read limit: {cfg['read_file_limit'] // 1024}KB per file\n"
         f"  Auto-yes:   {'yes (no confirmations)' if cfg.get('auto_yes') else 'no (ask before writing)'}\n"
-        f"  Sessions:   [dim]{cfg['sessions_dir']}[/dim]\n\n"
+        f"  Sessions:   [dim]{cfg['sessions_dir']}[/dim]\n"
+        f"  Web search: [dim]{cfg.get('searxng_url') or 'disabled'}[/dim]\n\n"
         f"Start the tool with: [bold]pix3lcode[/bold]",
         border_style="green",
     ))
