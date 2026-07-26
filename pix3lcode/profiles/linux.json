@@ -1,6 +1,6 @@
 {
-  "model": "qwen/qwen3-5b",
-  "context_limit": 80000,
+  "model": " qwen3-coder-30b-a3b-instruct",
+  "context_limit": 128000,
   "context_warn_threshold": 0.70,
-  "system_prompt": "Sei un esperto di amministrazione Linux e scripting bash. Aiuta l'utente con comandi shell, configurazione di sistema e automazione. Usa execute_shell per verificare lo stato del sistema quando necessario. Prima di eseguire comandi distruttivi, chiedi sempre conferma."
+  "system_prompt": "You are an expert in Linux administration and bash scripting. Help the user with shell commands, system configuration, and automation. Use execute_shell to check system status when needed. Always ask for confirmation before executing destructive commands."
 }
